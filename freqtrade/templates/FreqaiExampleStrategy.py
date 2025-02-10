@@ -1,12 +1,11 @@
 import logging
 from functools import reduce
-from typing import Dict
 
 import talib.abstract as ta
 from pandas import DataFrame
 from technical import qtpylib
 
-from freqtrade.strategy import CategoricalParameter, IStrategy
+from freqtrade.strategy import IStrategy
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +30,7 @@ class FreqaiExampleStrategy(IStrategy):
     plot_config = {
         "main_plot": {},
         "subplots": {
-            "&-s_close": {"prediction": {"color": "blue"}},
+            "&-s_close": {"&-s_close": {"color": "blue"}},
             "do_predict": {
                 "do_predict": {"color": "brown"},
             },
@@ -45,13 +44,9 @@ class FreqaiExampleStrategy(IStrategy):
     startup_candle_count: int = 40
     can_short = True
 
-    std_dev_multiplier_buy = CategoricalParameter(
-        [0.75, 1, 1.25, 1.5, 1.75], default=1.25, space="buy", optimize=True)
-    std_dev_multiplier_sell = CategoricalParameter(
-        [0.75, 1, 1.25, 1.5, 1.75], space="sell", default=1.25, optimize=True)
-
-    def feature_engineering_expand_all(self, dataframe: DataFrame, period: int,
-                                       metadata: Dict, **kwargs) -> DataFrame:
+    def feature_engineering_expand_all(
+        self, dataframe: DataFrame, period: int, metadata: dict, **kwargs
+    ) -> DataFrame:
         """
         *Only functional with FreqAI enabled strategies*
         This function will automatically expand the defined features on the config defined
@@ -94,12 +89,9 @@ class FreqaiExampleStrategy(IStrategy):
         dataframe["bb_upperband-period"] = bollinger["upper"]
 
         dataframe["%-bb_width-period"] = (
-            dataframe["bb_upperband-period"]
-            - dataframe["bb_lowerband-period"]
+            dataframe["bb_upperband-period"] - dataframe["bb_lowerband-period"]
         ) / dataframe["bb_middleband-period"]
-        dataframe["%-close-bb_lower-period"] = (
-            dataframe["close"] / dataframe["bb_lowerband-period"]
-        )
+        dataframe["%-close-bb_lower-period"] = dataframe["close"] / dataframe["bb_lowerband-period"]
 
         dataframe["%-roc-period"] = ta.ROC(dataframe, timeperiod=period)
 
@@ -110,7 +102,8 @@ class FreqaiExampleStrategy(IStrategy):
         return dataframe
 
     def feature_engineering_expand_basic(
-            self, dataframe: DataFrame, metadata: Dict, **kwargs) -> DataFrame:
+        self, dataframe: DataFrame, metadata: dict, **kwargs
+    ) -> DataFrame:
         """
         *Only functional with FreqAI enabled strategies*
         This function will automatically expand the defined features on the config defined
@@ -147,7 +140,8 @@ class FreqaiExampleStrategy(IStrategy):
         return dataframe
 
     def feature_engineering_standard(
-            self, dataframe: DataFrame, metadata: Dict, **kwargs) -> DataFrame:
+        self, dataframe: DataFrame, metadata: dict, **kwargs
+    ) -> DataFrame:
         """
         *Only functional with FreqAI enabled strategies*
         This optional function will be called once with the dataframe of the base timeframe.
@@ -177,7 +171,7 @@ class FreqaiExampleStrategy(IStrategy):
         dataframe["%-hour_of_day"] = dataframe["date"].dt.hour
         return dataframe
 
-    def set_freqai_targets(self, dataframe: DataFrame, metadata: Dict, **kwargs) -> DataFrame:
+    def set_freqai_targets(self, dataframe: DataFrame, metadata: dict, **kwargs) -> DataFrame:
         """
         *Only functional with FreqAI enabled strategies*
         Required function to set the targets for the model.
@@ -202,7 +196,7 @@ class FreqaiExampleStrategy(IStrategy):
             .mean()
             / dataframe["close"]
             - 1
-            )
+        )
 
         # Classifiers are typically set up with strings as targets:
         # df['&s-up_or_down'] = np.where( df["close"].shift(-100) >
@@ -229,7 +223,6 @@ class FreqaiExampleStrategy(IStrategy):
         return dataframe
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-
         # All indicators must be populated by feature_engineering_*() functions
 
         # the model will return all labels created by user in `set_freqai_targets()`
@@ -239,22 +232,13 @@ class FreqaiExampleStrategy(IStrategy):
 
         dataframe = self.freqai.start(dataframe, metadata, self)
 
-        for val in self.std_dev_multiplier_buy.range:
-            dataframe[f'target_roi_{val}'] = (
-                dataframe["&-s_close_mean"] + dataframe["&-s_close_std"] * val
-                )
-        for val in self.std_dev_multiplier_sell.range:
-            dataframe[f'sell_roi_{val}'] = (
-                dataframe["&-s_close_mean"] - dataframe["&-s_close_std"] * val
-                )
         return dataframe
 
     def populate_entry_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
-
         enter_long_conditions = [
             df["do_predict"] == 1,
-            df["&-s_close"] > df[f"target_roi_{self.std_dev_multiplier_buy.value}"],
-            ]
+            df["&-s_close"] > 0.01,
+        ]
 
         if enter_long_conditions:
             df.loc[
@@ -263,8 +247,8 @@ class FreqaiExampleStrategy(IStrategy):
 
         enter_short_conditions = [
             df["do_predict"] == 1,
-            df["&-s_close"] < df[f"sell_roi_{self.std_dev_multiplier_sell.value}"],
-            ]
+            df["&-s_close"] < -0.01,
+        ]
 
         if enter_short_conditions:
             df.loc[
@@ -274,24 +258,15 @@ class FreqaiExampleStrategy(IStrategy):
         return df
 
     def populate_exit_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
-        exit_long_conditions = [
-            df["do_predict"] == 1,
-            df["&-s_close"] < df[f"sell_roi_{self.std_dev_multiplier_sell.value}"] * 0.25,
-            ]
+        exit_long_conditions = [df["do_predict"] == 1, df["&-s_close"] < 0]
         if exit_long_conditions:
             df.loc[reduce(lambda x, y: x & y, exit_long_conditions), "exit_long"] = 1
 
-        exit_short_conditions = [
-            df["do_predict"] == 1,
-            df["&-s_close"] > df[f"target_roi_{self.std_dev_multiplier_buy.value}"] * 0.25,
-            ]
+        exit_short_conditions = [df["do_predict"] == 1, df["&-s_close"] > 0]
         if exit_short_conditions:
             df.loc[reduce(lambda x, y: x & y, exit_short_conditions), "exit_short"] = 1
 
         return df
-
-    def get_ticker_indicator(self):
-        return int(self.config["timeframe"][:-1])
 
     def confirm_trade_entry(
         self,
@@ -305,7 +280,6 @@ class FreqaiExampleStrategy(IStrategy):
         side: str,
         **kwargs,
     ) -> bool:
-
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         last_candle = df.iloc[-1].squeeze()
 

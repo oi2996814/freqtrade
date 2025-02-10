@@ -1,4 +1,5 @@
 {
+    "$schema": "https://schema.freqtrade.io/schema.json",
     "max_open_trades": 3,
     "stake_currency": "BTC",
     "stake_amount": 0.05,
@@ -70,6 +71,7 @@
     },
     "pairlists": [
         {"method": "StaticPairList"},
+        {"method": "FullTradesFilter"},
         {
             "method": "VolumePairList",
             "number_assets": 20,

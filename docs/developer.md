@@ -22,7 +22,7 @@ This will spin up a local server (usually on port 8000) so you can see if everyt
 ## Developer setup
 
 To configure a development environment, you can either use the provided [DevContainer](#devcontainer-setup), or use the `setup.sh` script and answer "y" when asked "Do you want to install dependencies for dev [y/N]? ".
-Alternatively (e.g. if your system is not supported by the setup.sh script), follow the manual installation process and run `pip3 install -e .[all]`.
+Alternatively (e.g. if your system is not supported by the setup.sh script), follow the manual installation process and run `pip3 install -r requirements-dev.txt` - followed by `pip3 install -e .[all]`.
 
 This will install all required tools for development, including `pytest`, `ruff`, `mypy`, and `coveralls`.
 
@@ -83,7 +83,7 @@ Details will obviously vary between setups - but this should work to get you sta
 ``` json
 {
     "name": "freqtrade trade",
-    "type": "python",
+    "type": "debugpy",
     "request": "launch",
     "module": "freqtrade",
     "console": "integratedTerminal",
@@ -116,7 +116,7 @@ A similar setup can also be taken for Pycharm - using `freqtrade` as module name
     ![Pycharm debug configuration](assets/pycharm_debug.png)
 
 !!! Note "Startup directory"
-    This assumes that you have the repository checked out, and the editor is started at the repository root level (so setup.py is at the top level of your repository).
+    This assumes that you have the repository checked out, and the editor is started at the repository root level (so pyproject.toml is at the top level of your repository).
 
 ## ErrorHandling
 
@@ -129,6 +129,8 @@ Below is an outline of exception inheritance hierarchy:
 + FreqtradeException
 |
 +---+ OperationalException
+|   |
+|   +---+ ConfigurationError
 |
 +---+ DependencyException
 |   |
@@ -160,7 +162,7 @@ Hopefully you also want to contribute this back upstream.
 
 Whatever your motivations are - This should get you off the ground in trying to develop a new Pairlist Handler.
 
-First of all, have a look at the [VolumePairList](https://github.com/freqtrade/freqtrade/blob/develop/freqtrade/pairlist/VolumePairList.py) Handler, and best copy this file with a name of your new Pairlist Handler.
+First of all, have a look at the [VolumePairList](https://github.com/freqtrade/freqtrade/blob/develop/freqtrade/plugins/pairlist/VolumePairList.py) Handler, and best copy this file with a name of your new Pairlist Handler.
 
 This is a simple Handler, which however serves as a good example on how to start developing.
 
@@ -203,7 +205,7 @@ This is called with each iteration of the bot (only if the Pairlist Handler is a
 
 It must return the resulting pairlist (which may then be passed into the chain of Pairlist Handlers).
 
-Validations are optional, the parent class exposes a `_verify_blacklist(pairlist)` and `_whitelist_for_active_markets(pairlist)` to do default filtering. Use this if you limit your result to a certain number of pairs - so the end-result is not shorter than expected.
+Validations are optional, the parent class exposes a `verify_blacklist(pairlist)` and `_whitelist_for_active_markets(pairlist)` to do default filtering. Use this if you limit your result to a certain number of pairs - so the end-result is not shorter than expected.
 
 #### filter_pairlist
 
@@ -217,14 +219,14 @@ The default implementation in the base class simply calls the `_validate_pair()`
 
 If overridden, it must return the resulting pairlist (which may then be passed into the next Pairlist Handler in the chain).
 
-Validations are optional, the parent class exposes a `_verify_blacklist(pairlist)` and `_whitelist_for_active_markets(pairlist)` to do default filters. Use this if you limit your result to a certain number of pairs - so the end result is not shorter than expected.
+Validations are optional, the parent class exposes a `verify_blacklist(pairlist)` and `_whitelist_for_active_markets(pairlist)` to do default filters. Use this if you limit your result to a certain number of pairs - so the end result is not shorter than expected.
 
 In `VolumePairList`, this implements different methods of sorting, does early validation so only the expected number of pairs is returned.
 
 ##### sample
 
 ``` python
-    def filter_pairlist(self, pairlist: List[str], tickers: Dict) -> List[str]:
+    def filter_pairlist(self, pairlist: list[str], tickers: dict) -> List[str]:
         # Generate dynamic whitelist
         pairs = self._calculate_pairlist(pairlist, tickers)
         return pairs
@@ -239,7 +241,6 @@ No protection should use datetime directly, but use the provided `date_now` vari
 
 !!! Tip "Writing a new Protection"
     Best copy one of the existing Protections to have a good example.
-    Don't forget to register your protection in `constants.py` under the variable `AVAILABLE_PROTECTIONS` - otherwise it will not be selectable.
 
 #### Implementation of a new protection
 
@@ -259,7 +260,7 @@ For that reason, they must implement the following methods:
 
 The `until` portion should be calculated using the provided `calculate_lock_end()` method.
 
-All Protections should use `"stop_duration"` / `"stop_duration_candles"` to define how long a a pair (or all pairs) should be locked.
+All Protections should use `"stop_duration"` / `"stop_duration_candles"` to define how long a pair (or all pairs) should be locked.
 The content of this is made available as `self._stop_duration` to the each Protection.
 
 If your protection requires a look-back period, please use `"lookback_period"` / `"lockback_period_candles"` to keep all protections aligned.
@@ -303,7 +304,7 @@ The `IProtection` parent class provides a helper method for this in `calculate_l
 
 Most exchanges supported by CCXT should work out of the box.
 
-To quickly test the public endpoints of an exchange, add a configuration for your exchange to `test_ccxt_compat.py` and run these tests with `pytest --longrun tests/exchange/test_ccxt_compat.py`.
+To quickly test the public endpoints of an exchange, add a configuration for your exchange to `tests/exchange_online/conftest.py` and run these tests with `pytest --longrun tests/exchange_online/test_ccxt_compat.py`.
 Completing these tests successfully a good basis point (it's a requirement, actually), however these won't guarantee correct exchange functioning, as this only tests public endpoints, but no private endpoint (like generate order or similar).
 
 Also try to use `freqtrade download-data` for an extended timerange (multiple months) and verify that the data downloaded correctly (no holes, the specified timerange was actually downloaded).
@@ -318,6 +319,7 @@ Additional tests / steps to complete:
 * Check if balance shows correctly (*)
 * Create market order (*)
 * Create limit order (*)
+* Cancel order (*)
 * Complete trade (enter + exit) (*)
   * Compare result calculation between exchange and bot
   * Ensure fees are applied correctly (check the database against the exchange)
@@ -375,7 +377,7 @@ from pathlib import Path
 
 exchange = ccxt.binance({
     'apiKey': '<apikey>',
-    'secret': '<secret>'
+    'secret': '<secret>',
     'options': {'defaultType': 'swap'}
     })
 _ = exchange.load_markets()
@@ -418,6 +420,9 @@ This part of the documentation is aimed at maintainers, and shows how to create 
 
 ### Create release branch
 
+!!! Note
+    Make sure that the `stable` branch is up-to-date!
+
 First, pick a commit that's about one week old (to not include latest additions to releases).
 
 ``` bash
@@ -430,13 +435,10 @@ Determine if crucial bugfixes have been made between this commit and the current
 * Merge the release branch (stable) into this branch.
 * Edit `freqtrade/__init__.py` and add the version matching the current date (for example `2019.7` for July 2019). Minor versions can be `2019.7.1` should we need to do a second release that month. Version numbers must follow allowed versions from PEP0440 to avoid failures pushing to pypi.
 * Commit this part.
-* push that branch to the remote and create a PR against the stable branch.
+* Push that branch to the remote and create a PR against the **stable branch**.
 * Update develop version to next version following the pattern `2019.8-dev`.
 
 ### Create changelog from git commits
-
-!!! Note
-    Make sure that the `stable` branch is up-to-date!
 
 ``` bash
 # Needs to be done before merging / pulling that branch.
@@ -478,21 +480,24 @@ Once the PR against stable is merged (best right after merging):
 
 ### pypi
 
-!!! Note
-    This process is now automated as part of Github Actions.
+!!! Warning "Manual Releases"
+    This process is automated as part of Github Actions.  
+    Manual pypi pushes should not be necessary.
 
-To create a pypi release, please run the following commands:
+??? example "Manual release"
+    To manually create a pypi release, please run the following commands:
 
-Additional requirement: `wheel`, `twine` (for uploading), account on pypi with proper permissions.
+    Additional requirement: `wheel`, `twine` (for uploading), account on pypi with proper permissions.
 
-``` bash
-python setup.py sdist bdist_wheel
+    ``` bash
+    pip install -U build
+    python -m build --sdist --wheel
 
-# For pypi test (to check if some change to the installation did work)
-twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+    # For pypi test (to check if some change to the installation did work)
+    twine upload --repository-url https://test.pypi.org/legacy/ dist/*
 
-# For production:
-twine upload dist/*
-```
+    # For production:
+    twine upload dist/*
+    ```
 
-Please don't push non-releases to the productive / real pypi instance.
+    Please don't push non-releases to the productive / real pypi instance.

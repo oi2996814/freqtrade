@@ -3,9 +3,10 @@ Remote PairList provider
 
 Provides pair list fetched from a remote source
 """
+
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import rapidjson
 import requests
@@ -13,10 +14,9 @@ from cachetools import TTLCache
 
 from freqtrade import __version__
 from freqtrade.configuration.load_config import CONFIG_PARSE_MODE
-from freqtrade.constants import Config
 from freqtrade.exceptions import OperationalException
-from freqtrade.exchange.types import Tickers
-from freqtrade.plugins.pairlist.IPairList import IPairList, PairlistParameter
+from freqtrade.exchange.exchange_types import Tickers
+from freqtrade.plugins.pairlist.IPairList import IPairList, PairlistParameter, SupportsBacktesting
 from freqtrade.plugins.pairlist.pairlist_helpers import expand_pairlist
 
 
@@ -24,50 +24,53 @@ logger = logging.getLogger(__name__)
 
 
 class RemotePairList(IPairList):
-
     is_pairlist_generator = True
+    # Potential winner bias
+    supports_backtesting = SupportsBacktesting.BIASED
 
-    def __init__(self, exchange, pairlistmanager,
-                 config: Config, pairlistconfig: Dict[str, Any],
-                 pairlist_pos: int) -> None:
-        super().__init__(exchange, pairlistmanager, config, pairlistconfig, pairlist_pos)
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
-        if 'number_assets' not in self._pairlistconfig:
+        if "number_assets" not in self._pairlistconfig:
             raise OperationalException(
-                '`number_assets` not specified. Please check your configuration '
-                'for "pairlist.config.number_assets"')
+                "`number_assets` not specified. Please check your configuration "
+                'for "pairlist.config.number_assets"'
+            )
 
-        if 'pairlist_url' not in self._pairlistconfig:
+        if "pairlist_url" not in self._pairlistconfig:
             raise OperationalException(
-                '`pairlist_url` not specified. Please check your configuration '
-                'for "pairlist.config.pairlist_url"')
+                "`pairlist_url` not specified. Please check your configuration "
+                'for "pairlist.config.pairlist_url"'
+            )
 
-        self._mode = self._pairlistconfig.get('mode', 'whitelist')
-        self._processing_mode = self._pairlistconfig.get('processing_mode', 'filter')
-        self._number_pairs = self._pairlistconfig['number_assets']
-        self._refresh_period: int = self._pairlistconfig.get('refresh_period', 1800)
-        self._keep_pairlist_on_failure = self._pairlistconfig.get('keep_pairlist_on_failure', True)
+        self._mode = self._pairlistconfig.get("mode", "whitelist")
+        self._processing_mode = self._pairlistconfig.get("processing_mode", "filter")
+        self._number_pairs = self._pairlistconfig["number_assets"]
+        self._refresh_period: int = self._pairlistconfig.get("refresh_period", 1800)
+        self._keep_pairlist_on_failure = self._pairlistconfig.get("keep_pairlist_on_failure", True)
         self._pair_cache: TTLCache = TTLCache(maxsize=1, ttl=self._refresh_period)
-        self._pairlist_url = self._pairlistconfig.get('pairlist_url', '')
-        self._read_timeout = self._pairlistconfig.get('read_timeout', 60)
-        self._bearer_token = self._pairlistconfig.get('bearer_token', '')
+        self._pairlist_url = self._pairlistconfig.get("pairlist_url", "")
+        self._read_timeout = self._pairlistconfig.get("read_timeout", 60)
+        self._bearer_token = self._pairlistconfig.get("bearer_token", "")
         self._init_done = False
-        self._last_pairlist: List[Any] = list()
+        self._save_to_file = self._pairlistconfig.get("save_to_file", None)
+        self._last_pairlist: list[Any] = list()
 
-        if self._mode not in ['whitelist', 'blacklist']:
+        if self._mode not in ["whitelist", "blacklist"]:
             raise OperationalException(
-                '`mode` not configured correctly. Supported Modes '
-                'are "whitelist","blacklist"')
+                '`mode` not configured correctly. Supported Modes are "whitelist","blacklist"'
+            )
 
-        if self._processing_mode not in ['filter', 'append']:
+        if self._processing_mode not in ["filter", "append"]:
             raise OperationalException(
-                '`processing_mode` not configured correctly. Supported Modes '
-                'are "filter","append"')
+                '`processing_mode` not configured correctly. Supported Modes are "filter","append"'
+            )
 
-        if self._pairlist_pos == 0 and self._mode == 'blacklist':
+        if self._pairlist_pos == 0 and self._mode == "blacklist":
             raise OperationalException(
-                'A `blacklist` mode RemotePairList can not be on the first '
-                'position of your pairlist.')
+                "A `blacklist` mode RemotePairList can not be on the first "
+                "position of your pairlist."
+            )
 
     @property
     def needstickers(self) -> bool:
@@ -89,7 +92,7 @@ class RemotePairList(IPairList):
         return "Retrieve pairs from a remote API or local file."
 
     @staticmethod
-    def available_parameters() -> Dict[str, PairlistParameter]:
+    def available_parameters() -> dict[str, PairlistParameter]:
         return {
             "pairlist_url": {
                 "type": "string",
@@ -115,7 +118,7 @@ class RemotePairList(IPairList):
                 "default": "filter",
                 "options": ["filter", "append"],
                 "description": "Processing mode",
-                "help": "Append pairs to incomming pairlist or filter them?",
+                "help": "Append pairs to incoming pairlist or filter them?",
             },
             **IPairList.refresh_period_parameter(),
             "keep_pairlist_on_failure": {
@@ -136,16 +139,24 @@ class RemotePairList(IPairList):
                 "description": "Bearer token",
                 "help": "Bearer token - used for auth against the upstream service.",
             },
+            "save_to_file": {
+                "type": "string",
+                "default": "",
+                "description": "Filename to save processed pairlist to.",
+                "help": "Specify a filename to save the processed pairlist in JSON format.",
+            },
         }
 
-    def process_json(self, jsonparse) -> List[str]:
-
-        pairlist = jsonparse.get('pairs', [])
-        remote_refresh_period = int(jsonparse.get('refresh_period', self._refresh_period))
+    def process_json(self, jsonparse) -> list[str]:
+        pairlist = jsonparse.get("pairs", [])
+        remote_refresh_period = int(jsonparse.get("refresh_period", self._refresh_period))
 
         if self._refresh_period < remote_refresh_period:
-            self.log_once(f'Refresh Period has been increased from {self._refresh_period}'
-                          f' to minimum allowed: {remote_refresh_period} from Remote.', logger.info)
+            self.log_once(
+                f"Refresh Period has been increased from {self._refresh_period}"
+                f" to minimum allowed: {remote_refresh_period} from Remote.",
+                logger.info,
+            )
 
             self._refresh_period = remote_refresh_period
             self._pair_cache = TTLCache(maxsize=1, ttl=remote_refresh_period)
@@ -154,28 +165,24 @@ class RemotePairList(IPairList):
 
         return pairlist
 
-    def return_last_pairlist(self) -> List[str]:
+    def return_last_pairlist(self) -> list[str]:
         if self._keep_pairlist_on_failure:
             pairlist = self._last_pairlist
-            self.log_once('Keeping last fetched pairlist', logger.info)
+            self.log_once("Keeping last fetched pairlist", logger.info)
         else:
             pairlist = []
 
         return pairlist
 
-    def fetch_pairlist(self) -> Tuple[List[str], float]:
-
-        headers = {
-            'User-Agent': 'Freqtrade/' + __version__ + ' Remotepairlist'
-        }
+    def fetch_pairlist(self) -> tuple[list[str], float]:
+        headers = {"User-Agent": "Freqtrade/" + __version__ + " Remotepairlist"}
 
         if self._bearer_token:
-            headers['Authorization'] = f'Bearer {self._bearer_token}'
+            headers["Authorization"] = f"Bearer {self._bearer_token}"
 
         try:
-            response = requests.get(self._pairlist_url, headers=headers,
-                                    timeout=self._read_timeout)
-            content_type = response.headers.get('content-type')
+            response = requests.get(self._pairlist_url, headers=headers, timeout=self._read_timeout)
+            content_type = response.headers.get("content-type")
             time_elapsed = response.elapsed.total_seconds()
 
             if "application/json" in str(content_type):
@@ -184,32 +191,29 @@ class RemotePairList(IPairList):
                 try:
                     pairlist = self.process_json(jsonparse)
                 except Exception as e:
-
-                    if self._init_done:
-                        pairlist = self.return_last_pairlist()
-                        logger.warning(f'Error while processing JSON data: {type(e)}')
-                    else:
-                        raise OperationalException(f'Error while processing JSON data: {type(e)}')
-
+                    pairlist = self._handle_error(f"Failed processing JSON data: {type(e)}")
             else:
-                if self._init_done:
-                    self.log_once(f'Error: RemotePairList is not of type JSON: '
-                                  f' {self._pairlist_url}', logger.info)
-                    pairlist = self.return_last_pairlist()
-                else:
-                    raise OperationalException('RemotePairList is not of type JSON, abort.')
+                pairlist = self._handle_error(
+                    f"RemotePairList is not of type JSON. {self._pairlist_url}"
+                )
 
         except requests.exceptions.RequestException:
-            self.log_once(f'Was not able to fetch pairlist from:'
-                          f' {self._pairlist_url}', logger.info)
-
-            pairlist = self.return_last_pairlist()
+            pairlist = self._handle_error(
+                f"Was not able to fetch pairlist from: {self._pairlist_url}"
+            )
 
             time_elapsed = 0
 
         return pairlist, time_elapsed
 
-    def gen_pairlist(self, tickers: Tickers) -> List[str]:
+    def _handle_error(self, error: str) -> list[str]:
+        if self._init_done:
+            self.log_once("Error: " + error, logger.info)
+            return self.return_last_pairlist()
+        else:
+            raise OperationalException(error)
+
+    def gen_pairlist(self, tickers: Tickers) -> list[str]:
         """
         Generate the pairlist
         :param tickers: Tickers (from exchange.get_tickers). May be cached.
@@ -217,7 +221,7 @@ class RemotePairList(IPairList):
         """
 
         if self._init_done:
-            pairlist = self._pair_cache.get('pairlist')
+            pairlist = self._pair_cache.get("pairlist")
             if pairlist == [None]:
                 # Valid but empty pairlist.
                 return []
@@ -236,20 +240,15 @@ class RemotePairList(IPairList):
 
                 if file_path.exists():
                     with file_path.open() as json_file:
-                        # Load the JSON data into a dictionary
-                        jsonparse = rapidjson.load(json_file, parse_mode=CONFIG_PARSE_MODE)
-
                         try:
+                            # Load the JSON data into a dictionary
+                            jsonparse = rapidjson.load(json_file, parse_mode=CONFIG_PARSE_MODE)
                             pairlist = self.process_json(jsonparse)
                         except Exception as e:
-                            if self._init_done:
-                                pairlist = self.return_last_pairlist()
-                                logger.warning(f'Error while processing JSON data: {type(e)}')
-                            else:
-                                raise OperationalException('Error while processing'
-                                                           f'JSON data: {type(e)}')
+                            pairlist = self._handle_error(f"processing JSON data: {type(e)}")
                 else:
-                    raise ValueError(f"{self._pairlist_url} does not exist.")
+                    pairlist = self._handle_error(f"{self._pairlist_url} does not exist.")
+
             else:
                 # Fetch Pairlist from Remote URL
                 pairlist, time_elapsed = self.fetch_pairlist()
@@ -258,24 +257,37 @@ class RemotePairList(IPairList):
 
         pairlist = expand_pairlist(pairlist, list(self._exchange.get_markets().keys()))
         pairlist = self._whitelist_for_active_markets(pairlist)
-        pairlist = pairlist[:self._number_pairs]
+        pairlist = pairlist[: self._number_pairs]
 
         if pairlist:
-            self._pair_cache['pairlist'] = pairlist.copy()
+            self._pair_cache["pairlist"] = pairlist.copy()
         else:
             # If pairlist is empty, set a dummy value to avoid fetching again
-            self._pair_cache['pairlist'] = [None]
+            self._pair_cache["pairlist"] = [None]
 
         if time_elapsed != 0.0:
-            self.log_once(f'Pairlist Fetched in {time_elapsed} seconds.', logger.info)
+            self.log_once(f"Pairlist Fetched in {time_elapsed} seconds.", logger.info)
         else:
-            self.log_once('Fetched Pairlist.', logger.info)
+            self.log_once("Fetched Pairlist.", logger.info)
 
         self._last_pairlist = list(pairlist)
 
+        if self._save_to_file:
+            self.save_pairlist(pairlist, self._save_to_file)
+
         return pairlist
 
-    def filter_pairlist(self, pairlist: List[str], tickers: Dict) -> List[str]:
+    def save_pairlist(self, pairlist: list[str], filename: str) -> None:
+        pairlist_data = {"pairs": pairlist}
+        try:
+            file_path = Path(filename)
+            with file_path.open("w") as json_file:
+                rapidjson.dump(pairlist_data, json_file)
+                logger.info(f"Processed pairlist saved to {filename}")
+        except Exception as e:
+            logger.error(f"Error saving processed pairlist to {filename}: {e}")
+
+    def filter_pairlist(self, pairlist: list[str], tickers: dict) -> list[str]:
         """
         Filters and sorts pairlist and returns the whitelist again.
         Called on each bot iteration - please use internal caching if necessary
@@ -302,5 +314,5 @@ class RemotePairList(IPairList):
             if filtered:
                 self.log_once(f"Blacklist - Filtered out pairs: {filtered}", logger.info)
 
-        merged_list = merged_list[:self._number_pairs]
+        merged_list = merged_list[: self._number_pairs]
         return merged_list

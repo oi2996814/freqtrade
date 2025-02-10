@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Union
+from typing import Any
 
 import orjson
 import rapidjson
@@ -26,7 +26,7 @@ class WebSocketSerializer(ABC):
     def _deserialize(self, data):
         raise NotImplementedError()
 
-    async def send(self, data: Union[WSMessageSchemaType, Dict[str, Any]]):
+    async def send(self, data: WSMessageSchemaType | dict[str, Any]):
         await self._websocket.send(self._serialize(data))
 
     async def recv(self) -> bytes:
@@ -46,15 +46,12 @@ class HybridJSONWebSocketSerializer(WebSocketSerializer):
 # Support serializing pandas DataFrames
 def _json_default(z):
     if isinstance(z, DataFrame):
-        return {
-            '__type__': 'dataframe',
-            '__value__': dataframe_to_json(z)
-        }
+        return {"__type__": "dataframe", "__value__": dataframe_to_json(z)}
     raise TypeError
 
 
 # Support deserializing JSON to pandas DataFrames
 def _json_object_hook(z):
-    if z.get('__type__') == 'dataframe':
-        return json_to_dataframe(z.get('__value__'))
+    if z.get("__type__") == "dataframe":
+        return json_to_dataframe(z.get("__value__"))
     return z

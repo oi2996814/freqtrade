@@ -55,7 +55,7 @@ This configuration enables kraken, as well as rate-limiting to avoid bans from t
 ## Binance
 
 !!! Warning "Server location and geo-ip restrictions"
-    Please be aware that binance restrict api access regarding the server country. The currents and non exhaustive countries blocked are United States, Malaysia (Singapour), Ontario (Canada). Please go to [binance terms > b. Eligibility](https://www.binance.com/en/terms) to find up to date list.
+    Please be aware that Binance restricts API access regarding the server country. The current and non-exhaustive countries blocked are Canada, Malaysia, Netherlands and United States. Please go to [binance terms > b. Eligibility](https://www.binance.com/en/terms) to find up to date list.
 
 Binance supports [time_in_force](configuration.md#understand-order_time_in_force).
 
@@ -67,6 +67,8 @@ Binance supports [time_in_force](configuration.md#understand-order_time_in_force
 
 For Binance, it is suggested to add `"BNB/<STAKE>"` to your blacklist to avoid issues, unless you are willing to maintain enough extra `BNB` on the account or unless you're willing to disable using `BNB` for fees.
 Binance accounts may use `BNB` for fees, and if a trade happens to be on `BNB`, further trades may consume this position and make the initial BNB trade unsellable as the expected amount is not there anymore.
+
+If not enough `BNB` is available to cover transaction fees, then fees will not be covered by `BNB` and no fee reduction will occur. Freqtrade will never buy BNB to cover for fees. BNB needs to be bought and monitored manually to this end.
 
 ### Binance sites
 
@@ -116,7 +118,7 @@ When trading on Binance Futures market, orderbook must be used because there is 
   },
 ```
 
-#### Binance futures settings
+#### Binance isolated futures settings
 
 Users will also have to have the futures-setting "Position Mode" set to "One-way Mode", and "Asset Mode" set to "Single-Asset Mode".
 These settings will be checked on startup, and freqtrade will show an error if this setting is wrong.
@@ -125,7 +127,37 @@ These settings will be checked on startup, and freqtrade will show an error if t
 
 Freqtrade will not attempt to change these settings.
 
+#### Binance BNFCR futures
+
+BNFCR mode are a special type of futures mode on Binance to work around regulatory issues in Europe.  
+To use BNFCR futures, you will have to have the following combination of settings:
+
+``` jsonc
+{
+    // ...
+    "trading_mode": "futures",
+    "margin_mode": "cross",
+    "proxy_coin": "BNFCR",
+    "stake_currency": "USDT" // or "USDC"
+    // ...
+}
+```
+
+The `stake_currency` setting defines the markets the bot will be operating in. This choice is really arbitrary.
+
+On the exchange, you'll have to use "Multi-asset Mode" - and "Position Mode set to "One-way Mode".  
+Freqtrade will check these settings on startup, but won't attempt to change them.
+
+## Bingx
+
+BingX supports [time_in_force](configuration.md#understand-order_time_in_force) with settings "GTC" (good till cancelled), "IOC" (immediate-or-cancel) and "PO" (Post only) settings.
+
+!!! Tip "Stoploss on Exchange"
+    Bingx supports `stoploss_on_exchange` and can use both stop-limit and stop-market orders. It provides great advantages, so we recommend to benefit from it by enabling stoploss on exchange.
+
 ## Kraken
+
+Kraken supports [time_in_force](configuration.md#understand-order_time_in_force) with settings "GTC" (good till cancelled), "IOC" (immediate-or-cancel) and "PO" (Post only) settings.
 
 !!! Tip "Stoploss on Exchange"
     Kraken supports `stoploss_on_exchange` and can use both stop-loss-market and stop-loss-limit orders. It provides great advantages, so we recommend to benefit from it.
@@ -136,13 +168,41 @@ Freqtrade will not attempt to change these settings.
 The Kraken API does only provide 720 historic candles, which is sufficient for Freqtrade dry-run and live trade modes, but is a problem for backtesting.
 To download data for the Kraken exchange, using `--dl-trades` is mandatory, otherwise the bot will download the same 720 candles over and over, and you'll not have enough backtest data.
 
-Due to the heavy rate-limiting applied by Kraken, the following configuration section should be used to download data:
+To speed up downloading, you can download the [trades zip files](https://support.kraken.com/hc/en-us/articles/360047543791-Downloadable-historical-market-data-time-and-sales-) kraken provides.
+These are usually updated once per quarter. Freqtrade expects these files to be placed in `user_data/data/kraken/trades_csv`.
 
-``` json
-    "ccxt_async_config": {
-        "enableRateLimit": true,
-        "rateLimit": 3100
-    },
+A structure as follows can make sense if using incremental files, with the "full" history in one directory, and incremental files in different directories.
+The assumption for this mode is that the data is downloaded and unzipped keeping filenames as they are.
+Duplicate content will be ignored (based on timestamp) - though the assumption is that there is no gap in the data.
+
+This means, if your "full" history ends in Q4 2022 - then both incremental updates Q1 2023 and Q2 2023 are available.
+Not having this will lead to incomplete data, and therefore invalid results while using the data.
+
+```
+└── trades_csv
+    ├── Kraken_full_history
+    │   ├── BCHEUR.csv
+    │   └── XBTEUR.csv
+    ├── Kraken_Trading_History_Q1_2023
+    │   ├── BCHEUR.csv
+    │   └── XBTEUR.csv
+    └── Kraken_Trading_History_Q2_2023
+        ├── BCHEUR.csv
+        └── XBTEUR.csv
+```
+
+You can convert these files into freqtrade files:
+
+``` bash
+freqtrade convert-trade-data --exchange kraken --format-from kraken_csv --format-to feather
+# Convert trade data to different ohlcv timeframes
+freqtrade trades-to-ohlcv -p BTC/EUR BCH/EUR --exchange kraken -t 1m 5m 15m 1h
+```
+
+The converted data also makes downloading data possible, and will start the download after the latest loaded trade.
+
+``` bash
+freqtrade download-data --exchange kraken --dl-trades -p BTC/EUR BCH/EUR 
 ```
 
 !!! Warning "Downloading data from kraken"
@@ -150,50 +210,8 @@ Due to the heavy rate-limiting applied by Kraken, the following configuration se
     It will also take a long time, as freqtrade will need to download every single trade that happened on the exchange for the pair / timerange combination, therefore please be patient.
 
 !!! Warning "rateLimit tuning"
-    Please pay attention that rateLimit configuration entry holds delay in milliseconds between requests, NOT requests\sec rate.
+    Please pay attention that rateLimit configuration entry holds delay in milliseconds between requests, NOT requests/sec rate.
     So, in order to mitigate Kraken API "Rate limit exceeded" exception, this configuration should be increased, NOT decreased.
-
-## Bittrex
-
-### Order types
-
-Bittrex does not support market orders. If you have a message at the bot startup about this, you should change order type values set in your configuration and/or in the strategy from `"market"` to `"limit"`. See some more details on this [here in the FAQ](faq.md#im-getting-the-exchange-bittrex-does-not-support-market-orders-message-and-cannot-run-my-strategy).
-
-Bittrex also does not support `VolumePairlist` due to limited / split API constellation at the moment.
-Please use `StaticPairlist`. Other pairlists (other than `VolumePairlist`) should not be affected.
-
-### Volume pairlist
-
-Bittrex does not support the direct usage of VolumePairList. This can however be worked around by using the advanced mode with `lookback_days: 1` (or more), which will emulate 24h volume.
-
-Read more in the [pairlist documentation](plugins.md#volumepairlist-advanced-mode).
-
-### Restricted markets
-
-Bittrex split its exchange into US and International versions.
-The International version has more pairs available, however the API always returns all pairs, so there is currently no automated way to detect if you're affected by the restriction.
-
-If you have restricted pairs in your whitelist, you'll get a warning message in the log on Freqtrade startup for each restricted pair.
-
-The warning message will look similar to the following:
-
-``` output
-[...] Message: bittrex {"success":false,"message":"RESTRICTED_MARKET","result":null,"explanation":null}"
-```
-
-If you're an "International" customer on the Bittrex exchange, then this warning will probably not impact you.
-If you're a US customer, the bot will fail to create orders for these pairs, and you should remove them from your whitelist.
-
-You can get a list of restricted markets by using the following snippet:
-
-``` python
-import ccxt
-ct = ccxt.bittrex()
-lm = ct.load_markets()
-
-res = [p for p, x in lm.items() if 'US' in x['info']['prohibitedIn']]
-print(res)
-```
 
 ## Kucoin
 
@@ -220,12 +238,12 @@ Kucoin supports [time_in_force](configuration.md#understand-order_time_in_force)
 For Kucoin, it is suggested to add `"KCS/<STAKE>"` to your blacklist to avoid issues, unless you are willing to maintain enough extra `KCS` on the account or unless you're willing to disable using `KCS` for fees. 
 Kucoin accounts may use `KCS` for fees, and if a trade happens to be on `KCS`, further trades may consume this position and make the initial `KCS` trade unsellable as the expected amount is not there anymore.
 
-## Huobi
+## HTX
 
 !!! Tip "Stoploss on Exchange"
-    Huobi supports `stoploss_on_exchange` and uses `stop-limit` orders. It provides great advantages, so we recommend to benefit from it by enabling stoploss on exchange.
+    HTX supports `stoploss_on_exchange` and uses `stop-limit` orders. It provides great advantages, so we recommend to benefit from it by enabling stoploss on exchange.
 
-## OKX (former OKEX)
+## OKX
 
 OKX requires a passphrase for each api key, you will therefore need to add this key into the configuration so your exchange section looks as follows:
 
@@ -238,6 +256,9 @@ OKX requires a passphrase for each api key, you will therefore need to add this 
     // ...
 }
 ```
+
+If you've registered with OKX on the host my.okx.com (OKX EAA)- you will need to use `"myokx"` as the exchange name.
+Using the wrong exchange will result in the error "OKX Error 50119: API key doesn't exist" - as the 2 are separate entities.
 
 !!! Warning
     OKX only provides 100 candles per api call. Therefore, the strategy will only have a pretty low amount of data available in backtesting mode.
@@ -255,24 +276,92 @@ OKX requires a passphrase for each api key, you will therefore need to add this 
 Gate.io allows the use of `POINT` to pay for fees. As this is not a tradable currency (no regular market available), automatic fee calculations will fail (and default to a fee of 0).
 The configuration parameter `exchange.unknown_fee_rate` can be used to specify the exchange rate between Point and the stake currency. Obviously, changing the stake-currency will also require changes to this value.
 
+Gate API keys require the following permissions on top of the market type you want to trade:
+
+* "Spot Trade" _or_ "Perpetual Futures" (Read and Write) (either select both, or the one matching the market you want to trade)
+* "Wallet" (read only)
+* "Account" (read only)
+
+Without these permissions, the bot will not start correctly and show errors like "permission missing".
+
 ## Bybit
 
 Futures trading on bybit is currently supported for USDT markets, and will use isolated futures mode.
-Users with unified accounts (there's no way back) can create a Sub-account which will start as "non-unified", and can therefore use isolated futures.
-On startup, freqtrade will set the position mode to "One-way Mode" for the whole (sub)account. This avoids making this call over and over again (slowing down bot operations), but means that changes to this setting may result in exceptions and errors
+
+On startup, freqtrade will set the position mode to "One-way Mode" for the whole (sub)account. This avoids making this call over and over again (slowing down bot operations), but means that changes to this setting may result in exceptions and errors.
 
 As bybit doesn't provide funding rate history, the dry-run calculation is used for live trades as well.
 
-API Keys for live futures trading (Subaccount on non-unified) must have the following permissions:
+API Keys for live futures trading must have the following permissions:
+
 * Read-write
 * Contract - Orders
 * Contract - Positions
 
 We do strongly recommend to limit all API keys to the IP you're going to use it from.
 
+!!! Warning "Unified accounts"
+    Freqtrade assumes accounts to be dedicated to the bot.
+    We therefore recommend the usage of one subaccount per bot. This is especially important when using unified accounts.  
+    Other configurations (multiple bots on one account, manual non-bot trades on the bot account) are not supported and may lead to unexpected behavior.
+
+
 !!! Tip "Stoploss on Exchange"
     Bybit (futures only) supports `stoploss_on_exchange` and uses `stop-loss-limit` orders. It provides great advantages, so we recommend to benefit from it by enabling stoploss on exchange.
     On futures, Bybit supports both `stop-limit` as well as `stop-market` orders. You can use either `"limit"` or `"market"` in the `order_types.stoploss` configuration setting to decide which type to use.
+
+## Bitmart
+
+Bitmart requires the API key Memo (the name you give the API key) to go along with the exchange key and secret.
+It's therefore required to pass the UID as well.
+
+```json
+"exchange": {
+    "name": "bitmart",
+    "uid": "your_bitmart_api_key_memo",
+    "secret": "your_exchange_secret",
+    "password": "your_exchange_api_key_password",
+    // ...
+}
+```
+
+!!! Warning "Necessary Verification"
+    Bitmart requires Verification Lvl2 to successfully trade on the spot market through the API - even though trading via UI works just fine with just Lvl1 verification.
+
+## Hyperliquid
+
+!!! Tip "Stoploss on Exchange"
+    Hyperliquid supports `stoploss_on_exchange` and uses `stop-loss-limit` orders. It provides great advantages, so we recommend to benefit from it.
+
+Hyperliquid is a Decentralized Exchange (DEX). Decentralized exchanges work a bit different compared to normal exchanges. Instead of authenticating private API calls using an API key, private API calls need to be signed with the private key of your wallet (We recommend using an api Wallet for this, generated either on Hyperliquid or in your wallet of choice).
+This needs to be configured like this:
+
+```json
+"exchange": {
+    "name": "hyperliquid",
+    "walletAddress": "your_eth_wallet_address",
+    "privateKey": "your_api_private_key",
+    // ...
+}
+```
+
+* walletAddress in hex format: `0x<40 hex characters>` - Can be easily copied from your wallet - and should be your wallet address, not your API Wallet Address.
+* privateKey in hex format: `0x<64 hex characters>` - Use the key the API Wallet shows on creation.
+
+Hyperliquid handles deposits and withdrawals on the Arbitrum One chain, a Layer 2 scaling solution built on top of Ethereum. Hyperliquid uses USDC as quote / collateral. The process of depositing USDC on Hyperliquid requires a couple of steps, see [how to start trading](https://hyperliquid.gitbook.io/hyperliquid-docs/onboarding/how-to-start-trading) for details on what steps are needed.
+
+!!! Note "Hyperliquid general usage Notes"
+    Hyperliquid does not support market orders, however ccxt will simulate market orders by placing limit orders with a maximum slippage of 5%.  
+    Unfortunately, hyperliquid only offers 5000 historic candles, so backtesting will either need to build candles historically (by waiting and downloading the data incrementally over time) - or will be limited to the last 5000 candles.
+
+!!! Info "Some general best practices (non exhaustive)"
+    * Beware of supply chain attacks, like pip package poisoning etcetera. Whenever you use your private key, make sure your environment is safe.
+    * Don't use your actual wallet private key for trading. Use the Hyperliquid [API generator](https://app.hyperliquid.xyz/API) to create a separate API wallet.
+    * Don't store your actual wallet private key on the server you use for freqtrade. Use the API wallet private key instead. This key won't allow withdrawals, only trading.
+    * Always keep your mnemonic phrase and private key private.
+    * Don't use the same mnemonic as the one you had to backup when initializing a hardware wallet, using the same mnemonic basically deletes the security of your hardware wallet.
+    * Create a different software wallet, only transfer the funds you want to trade with to that wallet, and use that wallet to trade on Hyperliquid.
+    * If you have funds you don't want to use for trading (after making a profit for example), transfer them back to your hardware wallet.
 
 ## All exchanges
 
@@ -283,7 +372,7 @@ Should you experience constant errors with Nonce (like `InvalidNonce`), it is be
 * The Ocean (exchange id: `theocean`) exchange uses Web3 functionality and requires `web3` python package to be installed:
 
 ```shell
-$ pip3 install web3
+pip3 install web3
 ```
 
 ### Getting latest price / Incomplete candles
@@ -291,7 +380,7 @@ $ pip3 install web3
 Most exchanges return current incomplete candle via their OHLCV/klines API interface.
 By default, Freqtrade assumes that incomplete candle is fetched from the exchange and removes the last candle assuming it's the incomplete candle.
 
-Whether your exchange returns incomplete candles or not can be checked using [the helper script](developer.md#Incomplete-candles) from the Contributor documentation.
+Whether your exchange returns incomplete candles or not can be checked using [the helper script](developer.md#incomplete-candles) from the Contributor documentation.
 
 Due to the danger of repainting, Freqtrade does not allow you to use this incomplete candle.
 

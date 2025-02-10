@@ -1,7 +1,6 @@
 import logging
-import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from catboost import CatBoostRegressor, Pool
 
@@ -22,7 +21,7 @@ class CatboostRegressor(BaseRegressionModel):
     top level config.json file.
     """
 
-    def fit(self, data_dictionary: Dict, dk: FreqaiDataKitchen, **kwargs) -> Any:
+    def fit(self, data_dictionary: dict, dk: FreqaiDataKitchen, **kwargs) -> Any:
         """
         User sets up the training and test data to fit their desired model here
         :param data_dictionary: the dictionary holding all data for train, test,
@@ -35,7 +34,7 @@ class CatboostRegressor(BaseRegressionModel):
             label=data_dictionary["train_labels"],
             weight=data_dictionary["train_weights"],
         )
-        if self.freqai_info.get('data_split_parameters', {}).get('test_size', 0.1) == 0:
+        if self.freqai_info.get("data_split_parameters", {}).get("test_size", 0.1) == 0:
             test_data = None
         else:
             test_data = Pool(
@@ -52,7 +51,10 @@ class CatboostRegressor(BaseRegressionModel):
             **self.model_training_parameters,
         )
 
-        model.fit(X=train_data, eval_set=test_data, init_model=init_model,
-                  log_cout=sys.stdout, log_cerr=sys.stderr)
+        model.fit(
+            X=train_data,
+            eval_set=test_data,
+            init_model=init_model,
+        )
 
         return model
