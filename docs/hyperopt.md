@@ -14,8 +14,7 @@ To learn how to get data for the pairs and exchange you're interested in, head o
 
 !!! Note
     Since 2021.4 release you no longer have to write a separate hyperopt class, but can configure the parameters directly in the strategy.
-    The legacy method is still supported, but it is no longer the recommended way of setting up hyperopt. 
-    The legacy documentation is available at [Legacy Hyperopt](advanced-hyperopt.md#legacy-hyperopt).
+    The legacy method was supported up to 2021.8 and has been removed in 2021.9.
 
 ## Install hyperopt dependencies
 
@@ -37,130 +36,7 @@ pip install -r requirements-hyperopt.txt
 
 ## Hyperopt command reference
 
-```
-usage: freqtrade hyperopt [-h] [-v] [--logfile FILE] [-V] [-c PATH] [-d PATH]
-                          [--userdir PATH] [-s NAME] [--strategy-path PATH]
-                          [--recursive-strategy-search] [--freqaimodel NAME]
-                          [--freqaimodel-path PATH] [-i TIMEFRAME]
-                          [--timerange TIMERANGE]
-                          [--data-format-ohlcv {json,jsongz,hdf5}]
-                          [--max-open-trades INT]
-                          [--stake-amount STAKE_AMOUNT] [--fee FLOAT]
-                          [-p PAIRS [PAIRS ...]] [--hyperopt-path PATH]
-                          [--eps] [--dmmp] [--enable-protections]
-                          [--dry-run-wallet DRY_RUN_WALLET]
-                          [--timeframe-detail TIMEFRAME_DETAIL] [-e INT]
-                          [--spaces {all,buy,sell,roi,stoploss,trailing,protection,trades,default} [{all,buy,sell,roi,stoploss,trailing,protection,trades,default} ...]]
-                          [--print-all] [--no-color] [--print-json] [-j JOBS]
-                          [--random-state INT] [--min-trades INT]
-                          [--hyperopt-loss NAME] [--disable-param-export]
-                          [--ignore-missing-spaces] [--analyze-per-epoch]
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -i TIMEFRAME, --timeframe TIMEFRAME
-                        Specify timeframe (`1m`, `5m`, `30m`, `1h`, `1d`).
-  --timerange TIMERANGE
-                        Specify what timerange of data to use.
-  --data-format-ohlcv {json,jsongz,hdf5}
-                        Storage format for downloaded candle (OHLCV) data.
-                        (default: `json`).
-  --max-open-trades INT
-                        Override the value of the `max_open_trades`
-                        configuration setting.
-  --stake-amount STAKE_AMOUNT
-                        Override the value of the `stake_amount` configuration
-                        setting.
-  --fee FLOAT           Specify fee ratio. Will be applied twice (on trade
-                        entry and exit).
-  -p PAIRS [PAIRS ...], --pairs PAIRS [PAIRS ...]
-                        Limit command to these pairs. Pairs are space-
-                        separated.
-  --hyperopt-path PATH  Specify additional lookup path for Hyperopt Loss
-                        functions.
-  --eps, --enable-position-stacking
-                        Allow buying the same pair multiple times (position
-                        stacking).
-  --dmmp, --disable-max-market-positions
-                        Disable applying `max_open_trades` during backtest
-                        (same as setting `max_open_trades` to a very high
-                        number).
-  --enable-protections, --enableprotections
-                        Enable protections for backtesting.Will slow
-                        backtesting down by a considerable amount, but will
-                        include configured protections
-  --dry-run-wallet DRY_RUN_WALLET, --starting-balance DRY_RUN_WALLET
-                        Starting balance, used for backtesting / hyperopt and
-                        dry-runs.
-  --timeframe-detail TIMEFRAME_DETAIL
-                        Specify detail timeframe for backtesting (`1m`, `5m`,
-                        `30m`, `1h`, `1d`).
-  -e INT, --epochs INT  Specify number of epochs (default: 100).
-  --spaces {all,buy,sell,roi,stoploss,trailing,protection,trades,default} [{all,buy,sell,roi,stoploss,trailing,protection,trades,default} ...]
-                        Specify which parameters to hyperopt. Space-separated
-                        list.
-  --print-all           Print all results, not only the best ones.
-  --no-color            Disable colorization of hyperopt results. May be
-                        useful if you are redirecting output to a file.
-  --print-json          Print output in JSON format.
-  -j JOBS, --job-workers JOBS
-                        The number of concurrently running jobs for
-                        hyperoptimization (hyperopt worker processes). If -1
-                        (default), all CPUs are used, for -2, all CPUs but one
-                        are used, etc. If 1 is given, no parallel computing
-                        code is used at all.
-  --random-state INT    Set random state to some positive integer for
-                        reproducible hyperopt results.
-  --min-trades INT      Set minimal desired number of trades for evaluations
-                        in the hyperopt optimization path (default: 1).
-  --hyperopt-loss NAME, --hyperoptloss NAME
-                        Specify the class name of the hyperopt loss function
-                        class (IHyperOptLoss). Different functions can
-                        generate completely different results, since the
-                        target for optimization is different. Built-in
-                        Hyperopt-loss-functions are:
-                        ShortTradeDurHyperOptLoss, OnlyProfitHyperOptLoss,
-                        SharpeHyperOptLoss, SharpeHyperOptLossDaily,
-                        SortinoHyperOptLoss, SortinoHyperOptLossDaily,
-                        CalmarHyperOptLoss, MaxDrawDownHyperOptLoss,
-                        MaxDrawDownRelativeHyperOptLoss,
-                        ProfitDrawDownHyperOptLoss
-  --disable-param-export
-                        Disable automatic hyperopt parameter export.
-  --ignore-missing-spaces, --ignore-unparameterized-spaces
-                        Suppress errors for any requested Hyperopt spaces that
-                        do not contain any parameters.
-  --analyze-per-epoch   Run populate_indicators once per epoch.
-
-Common arguments:
-  -v, --verbose         Verbose mode (-vv for more, -vvv to get all messages).
-  --logfile FILE        Log to the file specified. Special values are:
-                        'syslog', 'journald'. See the documentation for more
-                        details.
-  -V, --version         show program's version number and exit
-  -c PATH, --config PATH
-                        Specify configuration file (default:
-                        `userdir/config.json` or `config.json` whichever
-                        exists). Multiple --config options may be used. Can be
-                        set to `-` to read config from stdin.
-  -d PATH, --datadir PATH
-                        Path to directory with historical backtesting data.
-  --userdir PATH, --user-data-dir PATH
-                        Path to userdata directory.
-
-Strategy arguments:
-  -s NAME, --strategy NAME
-                        Specify strategy class name which will be used by the
-                        bot.
-  --strategy-path PATH  Specify additional strategy lookup path.
-  --recursive-strategy-search
-                        Recursively search for a strategy in the strategies
-                        folder.
-  --freqaimodel NAME    Specify a custom freqaimodels.
-  --freqaimodel-path PATH
-                        Specify additional lookup path for freqaimodels.
-
-```
+--8<-- "commands/hyperopt.md"
 
 ### Hyperopt checklist
 
@@ -337,11 +213,15 @@ There are four parameter types each suited for different purposes.
 * `CategoricalParameter` - defines a parameter with a predetermined number of choices.
 * `BooleanParameter` - Shorthand for `CategoricalParameter([True, False])` - great for "enable" parameters.
 
-!!! Tip "Disabling parameter optimization"
-    Each parameter takes two boolean parameters:
-    * `load` - when set to `False` it will not load values configured in `buy_params` and `sell_params`.
-    * `optimize` - when set to `False` parameter will not be included in optimization process.
-    Use these parameters to quickly prototype various ideas.
+### Parameter options
+
+There are two parameter options that can help you to quickly test various ideas:
+
+* `optimize` - when set to `False`, the parameter will not be included in optimization process. (Default: True)
+* `load` - when set to `False`, results of a previous hyperopt run (in `buy_params` and `sell_params` either in your strategy or the JSON output file) will not be used as the starting value for subsequent hyperopts. The default value specified in the parameter will be used instead. (Default: True)
+
+!!! Tip "Effects of `load=False` on backtesting"
+    Be aware that setting the `load` option to `False` will mean backtesting will also use the default value specified in the parameter and *not* the value found through hyperoptimisation.
 
 !!! Warning
     Hyperoptable parameters cannot be used in `populate_indicators` - as hyperopt does not recalculate indicators for each epoch, so the starting value would be used in this case.
@@ -435,13 +315,12 @@ While this strategy is most likely too simple to provide consistent profit, it s
 ??? Hint "Performance tip"
     During normal hyperopting, indicators are calculated once and supplied to each epoch, linearly increasing RAM usage as a factor of increasing cores. As this also has performance implications, there are two alternatives to reduce RAM usage
 
-    * Move `ema_short` and `ema_long` calculations from `populate_indicators()` to `populate_entry_trend()`. Since `populate_entry_trend()` gonna be calculated every epochs, you don't need to use `.range` functionality.
+    * Move `ema_short` and `ema_long` calculations from `populate_indicators()` to `populate_entry_trend()`. Since `populate_entry_trend()` will be calculated every epoch, you don't need to use `.range` functionality.
     * hyperopt provides `--analyze-per-epoch` which will move the execution of `populate_indicators()` to the epoch process, calculating a single value per parameter per epoch instead of using the `.range` functionality. In this case, `.range` functionality will only return the actually used value.
 
     These alternatives will reduce RAM usage, but increase CPU usage. However, your hyperopting run will be less likely to fail due to Out Of Memory (OOM) issues.
 
     Whether you are using `.range` functionality or the alternatives above, you should try to use space ranges as small as possible since this will improve CPU/RAM usage.
-
 
 ## Optimizing protections
 
@@ -586,14 +465,15 @@ Currently, the following loss functions are builtin:
 
 * `ShortTradeDurHyperOptLoss` - (default legacy Freqtrade hyperoptimization loss function) - Mostly for short trade duration and avoiding losses.
 * `OnlyProfitHyperOptLoss` - takes only amount of profit into consideration.
-* `SharpeHyperOptLoss` - optimizes Sharpe Ratio calculated on trade returns relative to standard deviation.
-* `SharpeHyperOptLossDaily` - optimizes Sharpe Ratio calculated on **daily** trade returns relative to standard deviation.
-* `SortinoHyperOptLoss` - optimizes Sortino Ratio calculated on trade returns relative to **downside** standard deviation.
+* `SharpeHyperOptLoss` - Optimizes Sharpe Ratio calculated on trade returns relative to standard deviation.
+* `SharpeHyperOptLossDaily` - Optimizes Sharpe Ratio calculated on **daily** trade returns relative to standard deviation.
+* `SortinoHyperOptLoss` - Optimizes Sortino Ratio calculated on trade returns relative to **downside** standard deviation.
 * `SortinoHyperOptLossDaily` - optimizes Sortino Ratio calculated on **daily** trade returns relative to **downside** standard deviation.
 * `MaxDrawDownHyperOptLoss` - Optimizes Maximum absolute drawdown.
 * `MaxDrawDownRelativeHyperOptLoss` -  Optimizes both maximum absolute drawdown while also adjusting for maximum relative drawdown.
 * `CalmarHyperOptLoss` - Optimizes Calmar Ratio calculated on trade returns relative to max drawdown.
 * `ProfitDrawDownHyperOptLoss` - Optimizes by max Profit & min Drawdown objective. `DRAWDOWN_MULT` variable within the hyperoptloss file can be adjusted to be stricter or more flexible on drawdown purposes.
+* `MultiMetricHyperOptLoss` -  Optimizes by several key metrics to achieve balanced performance. The primary focus is on maximizing Profit and minimizing Drawdown, while also considering additional metrics such as Profit Factor, Expectancy Ratio and Winrate. Moreover, it applies a penalty for epochs with a low number of trades, encouraging strategies with adequate trade frequency.
 
 Creation of a custom loss function is covered in the [Advanced Hyperopt](advanced-hyperopt.md) part of the documentation.
 
@@ -761,7 +641,7 @@ Override the `roi_space()` method if you need components of the ROI tables to va
 A sample for these methods can be found in the [overriding pre-defined spaces section](advanced-hyperopt.md#overriding-pre-defined-spaces).
 
 !!! Note "Reduced search space"
-    To limit the search space further, Decimals are limited to 3 decimal places (a precision of 0.001). This is usually sufficient, every value more precise than this will usually result in overfitted results. You can however [overriding pre-defined spaces](advanced-hyperopt.md#pverriding-pre-defined-spaces) to change this to your needs.
+    To limit the search space further, Decimals are limited to 3 decimal places (a precision of 0.001). This is usually sufficient, every value more precise than this will usually result in overfitted results. You can however [overriding pre-defined spaces](advanced-hyperopt.md#overriding-pre-defined-spaces) to change this to your needs.
 
 ### Understand Hyperopt Stoploss results
 
@@ -803,7 +683,7 @@ If you have the `stoploss_space()` method in your custom hyperopt file, remove i
 Override the `stoploss_space()` method and define the desired range in it if you need stoploss values to vary in other range during hyperoptimization. A sample for this method can be found in the [overriding pre-defined spaces section](advanced-hyperopt.md#overriding-pre-defined-spaces).
 
 !!! Note "Reduced search space"
-    To limit the search space further, Decimals are limited to 3 decimal places (a precision of 0.001). This is usually sufficient, every value more precise than this will usually result in overfitted results. You can however [overriding pre-defined spaces](advanced-hyperopt.md#pverriding-pre-defined-spaces) to change this to your needs.
+    To limit the search space further, Decimals are limited to 3 decimal places (a precision of 0.001). This is usually sufficient, every value more precise than this will usually result in overfitted results. You can however [overriding pre-defined spaces](advanced-hyperopt.md#overriding-pre-defined-spaces) to change this to your needs.
 
 ### Understand Hyperopt Trailing Stop results
 
@@ -864,18 +744,15 @@ You can use the `--print-all` command line option if you would like to see all r
 
 ## Position stacking and disabling max market positions
 
-In some situations, you may need to run Hyperopt (and Backtesting) with the
-`--eps`/`--enable-position-staking` and `--dmmp`/`--disable-max-market-positions` arguments.
+In some situations, you may need to run Hyperopt (and Backtesting) with the `--eps`/`--enable-position-staking` argument, or you may need to set `max_open_trades` to a very high number to disable the limit on the number of open trades.
 
 By default, hyperopt emulates the behavior of the Freqtrade Live Run/Dry Run, where only one
-open trade is allowed for every traded pair. The total number of trades open for all pairs
+open trade per pair is allowed. The total number of trades open for all pairs
 is also limited by the `max_open_trades` setting. During Hyperopt/Backtesting this may lead to
-some potential trades to be hidden (or masked) by previously open trades.
+potential trades being hidden (or masked) by already open trades.
 
-The `--eps`/`--enable-position-stacking` argument allows emulation of buying the same pair multiple times,
-while `--dmmp`/`--disable-max-market-positions` disables applying `max_open_trades`
-during Hyperopt/Backtesting (which is equal to setting `max_open_trades` to a very high
-number).
+The `--eps`/`--enable-position-stacking` argument allows emulation of buying the same pair multiple times.
+Using `--max-open-trades` with a very high number will disable the limit on the number of open trades.
 
 !!! Note
     Dry/live runs will **NOT** use position stacking - therefore it does make sense to also validate the strategy without this as it's closer to reality.
@@ -916,12 +793,44 @@ Your epochs should therefore be aligned to the possible values - or you should b
 
 After you run Hyperopt for the desired amount of epochs, you can later list all results for analysis, select only best or profitable once, and show the details for any of the epochs previously evaluated. This can be done with the `hyperopt-list` and `hyperopt-show` sub-commands. The usage of these sub-commands is described in the [Utils](utils.md#list-hyperopt-results) chapter.
 
+## Output debug messages from your strategy
+
+If you want to output debug messages from your strategy, you can use the `logging` module. By default, Freqtrade will output all messages with a level of `INFO` or higher. 
+
+
+``` python
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+
+class MyAwesomeStrategy(IStrategy):
+    ...
+
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        logger.info("This is a debug message")
+        ...
+
+```
+
+!!! Note "using print"
+    Messages printed via `print()` will not be shown in the hyperopt output unless parallelism is disabled (`-j 1`). 
+    It is recommended to use the `logging` module instead.
+
 ## Validate backtesting results
 
 Once the optimized strategy has been implemented into your strategy, you should backtest this strategy to make sure everything is working as expected.
 
-To achieve same the results (number of trades, their durations, profit, etc.) as during Hyperopt, please use the same configuration and parameters (timerange, timeframe, ...) used for hyperopt `--dmmp`/`--disable-max-market-positions` and `--eps`/`--enable-position-stacking` for Backtesting.
+To achieve same the results (number of trades, their durations, profit, etc.) as during Hyperopt, please use the same configuration and parameters (timerange, timeframe, ...) used for hyperopt for Backtesting.
 
-Should results not match, please double-check to make sure you transferred all conditions correctly.
-Pay special care to the stoploss, max_open_trades and trailing stoploss parameters, as these are often set in configuration files, which override changes to the strategy.
-You should also carefully review the log of your backtest to ensure that there were no parameters inadvertently set by the configuration (like `stoploss`, `max_open_trades` or `trailing_stop`).
+### Why do my backtest results not match my hyperopt results?
+
+Should results not match, check the following factors:
+
+* You may have added parameters to hyperopt in `populate_indicators()` where they will be calculated only once **for all epochs**. If you are, for example, trying to optimise multiple SMA timeperiod values, the hyperoptable timeperiod parameter should be placed in `populate_entry_trend()` which is calculated every epoch. See [Optimizing an indicator parameter](https://www.freqtrade.io/en/stable/hyperopt/#optimizing-an-indicator-parameter).
+* If you have disabled the auto-export of hyperopt parameters into the JSON parameters file, double-check to make sure you transferred all hyperopted values into your strategy correctly.
+* Check the logs to verify what parameters are being set and what values are being used.
+* Pay special care to the stoploss, max_open_trades and trailing stoploss parameters, as these are often set in configuration files, which override changes to the strategy. Check the logs of your backtest to ensure that there were no parameters inadvertently set by the configuration (like `stoploss`, `max_open_trades` or `trailing_stop`).
+* Verify that you do not have an unexpected parameters JSON file overriding the parameters or the default hyperopt settings in your strategy.
+* Verify that any protections that are enabled in backtesting are also enabled when hyperopting, and vice versa. When using `--space protection`, protections are auto-enabled for hyperopting.

@@ -25,7 +25,7 @@ function check_installed_python() {
         exit 2
     fi
 
-    for v in 11 10 9 8
+    for v in 12 11 10
     do
         PYTHON="python3.${v}"
         which $PYTHON
@@ -36,7 +36,7 @@ function check_installed_python() {
         fi
     done
 
-    echo "No usable python found. Please make sure to have python3.8 or newer installed."
+    echo "No usable python found. Please make sure to have python3.10 or newer installed."
     exit 1
 }
 
@@ -136,22 +136,6 @@ function install_talib() {
     cd ..
 }
 
-function install_mac_newer_python_dependencies() {
-
-    if [ ! $(brew --prefix --installed hdf5 2>/dev/null) ]
-    then
-        echo_block "Installing hdf5"
-        brew install hdf5
-    fi
-    export HDF5_DIR=$(brew --prefix)
-
-    if [ ! $(brew --prefix --installed c-blosc 2>/dev/null) ]
-    then
-        echo_block "Installing c-blosc"
-        brew install c-blosc
-    fi
-    export CBLOSC_DIR=$(brew --prefix)
-}
 
 # Install bot MacOS
 function install_macos() {
@@ -161,14 +145,10 @@ function install_macos() {
         /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
     fi
 
-    brew install gettext
+    brew install gettext libomp
 
     #Gets number after decimal in python version
     version=$(egrep -o 3.\[0-9\]+ <<< $PYTHON | sed 's/3.//g')
-
-    if [[ $version -ge 9 ]]; then               #Checks if python version >= 3.9
-        install_mac_newer_python_dependencies
-    fi
 }
 
 # Install bot Debian_ubuntu
@@ -192,7 +172,7 @@ function update() {
     fi
     updateenv
     echo "Update completed."
-    echo_block "Don't forget to activate your virtual enviorment with 'source .venv/bin/activate'!"
+    echo_block "Don't forget to activate your virtual environment with 'source .venv/bin/activate'!"
 
 }
 
@@ -277,7 +257,7 @@ function install() {
         install_redhat
     else
         echo "This script does not support your OS."
-        echo "If you have Python version 3.8 - 3.11, pip, virtualenv, ta-lib you can continue."
+        echo "If you have Python version 3.10 - 3.12, pip, virtualenv, ta-lib you can continue."
         echo "Wait 10 seconds to continue the next install steps or use ctrl+c to interrupt this shell."
         sleep 10
     fi
@@ -304,7 +284,7 @@ function help() {
     echo "	-p,--plot       Install dependencies for Plotting scripts."
 }
 
-# Verify if 3.8+ is installed
+# Verify if 3.10+ is installed
 check_installed_python
 
 case $* in

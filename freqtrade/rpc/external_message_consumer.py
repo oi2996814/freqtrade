@@ -4,11 +4,13 @@ ExternalMessageConsumer module
 Main purpose is to connect to external bot's message websocket to consume data
 from it
 """
+
 import asyncio
 import logging
 import socket
+from collections.abc import Callable
 from threading import Thread
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, TypedDict, Union
+from typing import Any, TypedDict
 
 import websockets
 from pydantic import ValidationError
@@ -19,14 +21,15 @@ from freqtrade.enums import RPCMessageType
 from freqtrade.misc import remove_entry_exit_signals
 from freqtrade.rpc.api_server.ws.channel import WebSocketChannel, create_channel
 from freqtrade.rpc.api_server.ws.message_stream import MessageStream
-from freqtrade.rpc.api_server.ws_schemas import (WSAnalyzedDFMessage, WSAnalyzedDFRequest,
-                                                 WSMessageSchema, WSRequestSchema,
-                                                 WSSubscribeRequest, WSWhitelistMessage,
-                                                 WSWhitelistRequest)
-
-
-if TYPE_CHECKING:
-    import websockets.connect
+from freqtrade.rpc.api_server.ws_schemas import (
+    WSAnalyzedDFMessage,
+    WSAnalyzedDFRequest,
+    WSMessageSchema,
+    WSRequestSchema,
+    WSSubscribeRequest,
+    WSWhitelistMessage,
+    WSWhitelistRequest,
+)
 
 
 class Producer(TypedDict):
@@ -40,7 +43,7 @@ class Producer(TypedDict):
 logger = logging.getLogger(__name__)
 
 
-def schema_to_dict(schema: Union[WSMessageSchema, WSRequestSchema]):
+def schema_to_dict(schema: WSMessageSchema | WSRequestSchema):
     return schema.model_dump(exclude_none=True)
 
 
@@ -50,11 +53,7 @@ class ExternalMessageConsumer:
     other freqtrade bot's
     """
 
-    def __init__(
-        self,
-        config: Dict[str, Any],
-        dataprovider: DataProvider
-    ):
+    def __init__(self, config: dict[str, Any], dataprovider: DataProvider):
         self._config = config
         self._dp = dataprovider
 
@@ -64,21 +63,21 @@ class ExternalMessageConsumer:
         self._main_task = None
         self._sub_tasks = None
 
-        self._emc_config = self._config.get('external_message_consumer', {})
+        self._emc_config = self._config.get("external_message_consumer", {})
 
-        self.enabled = self._emc_config.get('enabled', False)
-        self.producers: List[Producer] = self._emc_config.get('producers', [])
+        self.enabled = self._emc_config.get("enabled", False)
+        self.producers: list[Producer] = self._emc_config.get("producers", [])
 
-        self.wait_timeout = self._emc_config.get('wait_timeout', 30)  # in seconds
-        self.ping_timeout = self._emc_config.get('ping_timeout', 10)  # in seconds
-        self.sleep_time = self._emc_config.get('sleep_time', 10)  # in seconds
+        self.wait_timeout = self._emc_config.get("wait_timeout", 30)  # in seconds
+        self.ping_timeout = self._emc_config.get("ping_timeout", 10)  # in seconds
+        self.sleep_time = self._emc_config.get("sleep_time", 10)  # in seconds
 
         # The amount of candles per dataframe on the initial request
-        self.initial_candle_limit = self._emc_config.get('initial_candle_limit', 1500)
+        self.initial_candle_limit = self._emc_config.get("initial_candle_limit", 1500)
 
         # Message size limit, in megabytes. Default 8mb, Use bitwise operator << 20 to convert
         # as the websockets client expects bytes.
-        self.message_size_limit = (self._emc_config.get('message_size_limit', 8) << 20)
+        self.message_size_limit = self._emc_config.get("message_size_limit", 8) << 20
 
         # Setting these explicitly as they probably shouldn't be changed by a user
         # Unless we somehow integrate this with the strategy to allow creating
@@ -86,19 +85,19 @@ class ExternalMessageConsumer:
         self.topics = [RPCMessageType.WHITELIST, RPCMessageType.ANALYZED_DF]
 
         # Allow setting data for each initial request
-        self._initial_requests: List[WSRequestSchema] = [
+        self._initial_requests: list[WSRequestSchema] = [
             WSSubscribeRequest(data=self.topics),
             WSWhitelistRequest(),
-            WSAnalyzedDFRequest()
+            WSAnalyzedDFRequest(),
         ]
 
         # Specify which function to use for which RPCMessageType
-        self._message_handlers: Dict[str, Callable[[str, WSMessageSchema], None]] = {
+        self._message_handlers: dict[str, Callable[[str, WSMessageSchema], None]] = {
             RPCMessageType.WHITELIST: self._consume_whitelist_message,
             RPCMessageType.ANALYZED_DF: self._consume_analyzed_df_message,
         }
 
-        self._channel_streams: Dict[str, MessageStream] = {}
+        self._channel_streams: dict[str, MessageStream] = {}
 
         self.start()
 
@@ -187,31 +186,24 @@ class ExternalMessageConsumer:
         """
         while self._running:
             try:
-                host, port = producer['host'], producer['port']
-                token = producer['ws_token']
-                name = producer['name']
-                scheme = 'wss' if producer.get('secure', False) else 'ws'
+                host, port = producer["host"], producer["port"]
+                token = producer["ws_token"]
+                name = producer["name"]
+                scheme = "wss" if producer.get("secure", False) else "ws"
                 ws_url = f"{scheme}://{host}:{port}/api/v1/message/ws?token={token}"
 
                 # This will raise InvalidURI if the url is bad
                 async with websockets.connect(
-                    ws_url,
-                    max_size=self.message_size_limit,
-                    ping_interval=None
+                    ws_url, max_size=self.message_size_limit, ping_interval=None
                 ) as ws:
-                    async with create_channel(
-                        ws,
-                        channel_id=name,
-                        send_throttle=0.5
-                    ) as channel:
-
+                    async with create_channel(ws, channel_id=name, send_throttle=0.5) as channel:
                         # Create the message stream for this channel
                         self._channel_streams[name] = MessageStream()
 
                         # Run the channel tasks while connected
                         await channel.run_channel_tasks(
                             self._receive_messages(channel, producer, lock),
-                            self._send_requests(channel, self._channel_streams[name])
+                            self._send_requests(channel, self._channel_streams[name]),
                         )
 
             except (websockets.exceptions.InvalidURI, ValueError) as e:
@@ -221,8 +213,7 @@ class ExternalMessageConsumer:
             except (
                 socket.gaierror,
                 ConnectionRefusedError,
-                websockets.exceptions.InvalidStatusCode,
-                websockets.exceptions.InvalidMessage
+                websockets.exceptions.InvalidHandshake,
             ) as e:
                 logger.error(f"Connection Refused - {e} retrying in {self.sleep_time}s")
                 await asyncio.sleep(self.sleep_time)
@@ -230,14 +221,14 @@ class ExternalMessageConsumer:
 
             except (
                 websockets.exceptions.ConnectionClosedError,
-                websockets.exceptions.ConnectionClosedOK
+                websockets.exceptions.ConnectionClosedOK,
             ):
                 # Just keep trying to connect again indefinitely
                 await asyncio.sleep(self.sleep_time)
                 continue
 
             except Exception as e:
-                # An unforseen error has occurred, log and continue
+                # An unforeseen error has occurred, log and continue
                 logger.error("Unexpected error has occurred:")
                 logger.exception(e)
                 await asyncio.sleep(self.sleep_time)
@@ -255,10 +246,7 @@ class ExternalMessageConsumer:
             await channel.send(request)
 
     async def _receive_messages(
-        self,
-        channel: WebSocketChannel,
-        producer: Producer,
-        lock: asyncio.Lock
+        self, channel: WebSocketChannel, producer: Producer, lock: asyncio.Lock
     ):
         """
         Loop to handle receiving messages from a Producer
@@ -269,10 +257,7 @@ class ExternalMessageConsumer:
         """
         while self._running:
             try:
-                message = await asyncio.wait_for(
-                    channel.recv(),
-                    timeout=self.wait_timeout
-                )
+                message = await asyncio.wait_for(channel.recv(), timeout=self.wait_timeout)
 
                 try:
                     async with lock:
@@ -286,7 +271,7 @@ class ExternalMessageConsumer:
                 try:
                     # ping
                     pong = await channel.ping()
-                    latency = (await asyncio.wait_for(pong, timeout=self.ping_timeout) * 1000)
+                    latency = await asyncio.wait_for(pong, timeout=self.ping_timeout) * 1000
 
                     logger.info(f"Connection to {channel} still alive, latency: {latency}ms")
                     continue
@@ -297,11 +282,7 @@ class ExternalMessageConsumer:
                     logger.debug(e, exc_info=e)
                     raise
 
-    def send_producer_request(
-        self,
-        producer_name: str,
-        request: Union[WSRequestSchema, Dict[str, Any]]
-    ):
+    def send_producer_request(self, producer_name: str, request: WSRequestSchema | dict[str, Any]):
         """
         Publish a message to the producer's message stream to be
         sent by the channel task.
@@ -315,11 +296,11 @@ class ExternalMessageConsumer:
         if channel_stream := self._channel_streams.get(producer_name):
             channel_stream.publish(request)
 
-    def handle_producer_message(self, producer: Producer, message: Dict[str, Any]):
+    def handle_producer_message(self, producer: Producer, message: dict[str, Any]):
         """
         Handles external messages from a Producer
         """
-        producer_name = producer.get('name', 'default')
+        producer_name = producer.get("name", "default")
 
         try:
             producer_message = WSMessageSchema.model_validate(message)
@@ -372,7 +353,7 @@ class ExternalMessageConsumer:
             return
 
         # If set, remove the Entry and Exit signals from the Producer
-        if self._emc_config.get('remove_entry_exit_signals', False):
+        if self._emc_config.get("remove_entry_exit_signals", False):
             df = remove_entry_exit_signals(df)
 
         logger.debug(f"Received {len(df)} candle(s) for {key}")
@@ -383,29 +364,26 @@ class ExternalMessageConsumer:
             last_analyzed=la,
             timeframe=timeframe,
             candle_type=candle_type,
-            producer_name=producer_name
-            )
+            producer_name=producer_name,
+        )
 
         if not did_append:
-            # We want an overlap in candles incase some data has changed
+            # We want an overlap in candles in case some data has changed
             n_missing += 1
             # Set to None for all candles if we missed a full df's worth of candles
             n_missing = n_missing if n_missing < FULL_DATAFRAME_THRESHOLD else 1500
 
-            logger.warning(f"Holes in data or no existing df, requesting {n_missing} candles "
-                           f"for {key} from `{producer_name}`")
+            logger.warning(
+                f"Holes in data or no existing df, requesting {n_missing} candles "
+                f"for {key} from `{producer_name}`"
+            )
 
             self.send_producer_request(
-                producer_name,
-                WSAnalyzedDFRequest(
-                    data={
-                        "limit": n_missing,
-                        "pair": pair
-                    }
-                )
+                producer_name, WSAnalyzedDFRequest(data={"limit": n_missing, "pair": pair})
             )
             return
 
         logger.debug(
             f"Consumed message from `{producer_name}` "
-            f"of type `RPCMessageType.ANALYZED_DF` for {key}")
+            f"of type `RPCMessageType.ANALYZED_DF` for {key}"
+        )

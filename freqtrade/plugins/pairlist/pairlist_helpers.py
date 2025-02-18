@@ -1,11 +1,11 @@
 import re
-from typing import List
 
 from freqtrade.constants import Config
 
 
-def expand_pairlist(wildcardpl: List[str], available_pairs: List[str],
-                    keep_invalid: bool = False) -> List[str]:
+def expand_pairlist(
+    wildcardpl: list[str], available_pairs: list[str], keep_invalid: bool = False
+) -> list[str]:
     """
     Expand pairlist potentially containing wildcards based on available markets.
     This will implicitly filter all pairs in the wildcard-list which are not in available_pairs.
@@ -20,34 +20,30 @@ def expand_pairlist(wildcardpl: List[str], available_pairs: List[str],
         for pair_wc in wildcardpl:
             try:
                 comp = re.compile(pair_wc, re.IGNORECASE)
-                result_partial = [
-                    pair for pair in available_pairs if re.fullmatch(comp, pair)
-                ]
+                result_partial = [pair for pair in available_pairs if re.fullmatch(comp, pair)]
                 # Add all matching pairs.
                 # If there are no matching pairs (Pair not on exchange) keep it.
                 result += result_partial or [pair_wc]
             except re.error as err:
                 raise ValueError(f"Wildcard error in {pair_wc}, {err}")
 
-        result = [element for element in result if re.fullmatch(r'^[A-Za-z0-9:/-]+$', element)]
+        # Remove wildcard pairs that didn't have a match.
+        result = [element for element in result if re.fullmatch(r"^[A-Za-z0-9:/-]+$", element)]
 
     else:
         for pair_wc in wildcardpl:
             try:
                 comp = re.compile(pair_wc, re.IGNORECASE)
-                result += [
-                    pair for pair in available_pairs if re.fullmatch(comp, pair)
-                ]
+                result += [pair for pair in available_pairs if re.fullmatch(comp, pair)]
             except re.error as err:
                 raise ValueError(f"Wildcard error in {pair_wc}, {err}")
     return result
 
 
-def dynamic_expand_pairlist(config: Config, markets: List[str]) -> List[str]:
-    expanded_pairs = expand_pairlist(config['pairs'], markets)
-    if config.get('freqai', {}).get('enabled', False):
-        corr_pairlist = config['freqai']['feature_parameters']['include_corr_pairlist']
-        expanded_pairs += [pair for pair in corr_pairlist
-                           if pair not in config['pairs']]
+def dynamic_expand_pairlist(config: Config, markets: list[str]) -> list[str]:
+    expanded_pairs = expand_pairlist(config["pairs"], markets)
+    if config.get("freqai", {}).get("enabled", False):
+        corr_pairlist = config["freqai"]["feature_parameters"]["include_corr_pairlist"]
+        expanded_pairs += [pair for pair in corr_pairlist if pair not in config["pairs"]]
 
     return expanded_pairs

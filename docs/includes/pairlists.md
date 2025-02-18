@@ -2,11 +2,11 @@
 
 Pairlist Handlers define the list of pairs (pairlist) that the bot should trade. They are configured in the `pairlists` section of the configuration settings.
 
-In your configuration, you can use Static Pairlist (defined by the [`StaticPairList`](#static-pair-list) Pairlist Handler) and Dynamic Pairlist (defined by the [`VolumePairList`](#volume-pair-list) Pairlist Handler).
+In your configuration, you can use Static Pairlist (defined by the [`StaticPairList`](#static-pair-list) Pairlist Handler) and Dynamic Pairlist (defined by the [`VolumePairList`](#volume-pair-list) and [`PercentChangePairList`](#percent-change-pair-list) Pairlist Handlers).
 
 Additionally, [`AgeFilter`](#agefilter), [`PrecisionFilter`](#precisionfilter), [`PriceFilter`](#pricefilter), [`ShuffleFilter`](#shufflefilter), [`SpreadFilter`](#spreadfilter) and [`VolatilityFilter`](#volatilityfilter) act as Pairlist Filters, removing certain pairs and/or moving their positions in the pairlist.
 
-If multiple Pairlist Handlers are used, they are chained and a combination of all Pairlist Handlers forms the resulting pairlist the bot uses for trading and backtesting. Pairlist Handlers are executed in the sequence they are configured. You should always configure either `StaticPairList` or `VolumePairList` as the starting Pairlist Handler.
+If multiple Pairlist Handlers are used, they are chained and a combination of all Pairlist Handlers forms the resulting pairlist the bot uses for trading and backtesting. Pairlist Handlers are executed in the sequence they are configured. You can define either `StaticPairList`, `VolumePairList`, `ProducerPairList`, `RemotePairList`, `MarketCapPairList` or `PercentChangePairList` as the starting Pairlist Handler.
 
 Inactive markets are always removed from the resulting pairlist. Explicitly blacklisted pairs (those in the `pair_blacklist` configuration setting) are also always removed from the resulting pairlist.
 
@@ -22,9 +22,12 @@ You may also use something like `.*DOWN/BTC` or `.*UP/BTC` to exclude leveraged 
 
 * [`StaticPairList`](#static-pair-list) (default, if not configured differently)
 * [`VolumePairList`](#volume-pair-list)
+* [`PercentChangePairList`](#percent-change-pair-list)
 * [`ProducerPairList`](#producerpairlist)
 * [`RemotePairList`](#remotepairlist)
+* [`MarketCapPairList`](#marketcappairlist)
 * [`AgeFilter`](#agefilter)
+* [`FullTradesFilter`](#fulltradesfilter)
 * [`OffsetFilter`](#offsetfilter)
 * [`PerformanceFilter`](#performancefilter)
 * [`PrecisionFilter`](#precisionfilter)
@@ -52,7 +55,6 @@ It uses configuration from `exchange.pair_whitelist` and `exchange.pair_blacklis
 By default, only currently enabled pairs are allowed.
 To skip pair validation against active markets, set `"allow_inactive": true` within the `StaticPairList` configuration.
 This can be useful for backtesting expired pairs (like quarterly spot-markets).
-This option must be configured along with `exchange.skip_pair_validation` in the exchange configuration.
 
 When used in a "follow-up" position (e.g. after VolumePairlist), all pairs in `'pair_whitelist'` will be added to the end of the pairlist.
 
@@ -66,7 +68,7 @@ When used in the leading position of the chain of Pairlist Handlers, the `pair_w
 
 The `refresh_period` setting allows to define the period (in seconds), at which the pairlist will be refreshed. Defaults to 1800s (30 minutes).
 The pairlist cache (`refresh_period`) on `VolumePairList` is only applicable to generating pairlists.
-Filtering instances (not the first position in the list) will not apply any cache and will always use up-to-date data.
+Filtering instances (not the first position in the list) will not apply any cache (beyond caching candles for the duration of the candle in advanced mode) and will always use up-to-date data.
 
 `VolumePairList` is per default based on the ticker data from exchange, as reported by the ccxt library:
 
@@ -79,12 +81,14 @@ Filtering instances (not the first position in the list) will not apply any cach
         "number_assets": 20,
         "sort_key": "quoteVolume",
         "min_value": 0,
+        "max_value": 8000000,
         "refresh_period": 1800
     }
 ],
 ```
 
 You can define a minimum volume with `min_value` - which will filter out pairs with a volume lower than the specified value in the specified timerange.
+In addition to that, you can also define a maximum volume with `max_value` - which will filter out pairs with a volume higher than the specified value in the specified timerange.
 
 ##### VolumePairList Advanced mode
 
@@ -111,8 +115,8 @@ For convenience `lookback_days` can be specified, which will imply that 1d candl
 !!! Warning "Performance implications when using lookback range"
     If used in first position in combination with lookback, the computation of the range based volume can be time and resource consuming, as it downloads candles for all tradable pairs. Hence it's highly advised to use the standard approach with `VolumeFilter` to narrow the pairlist down for further range volume calculation.
 
-??? Tip "Unsupported exchanges (Bittrex, Gemini)"
-    On some exchanges (like Bittrex and Gemini), regular VolumePairList does not work as the api does not natively provide 24h volume. This can be worked around by using candle data to build the volume.
+??? Tip "Unsupported exchanges"
+    On some exchanges (like Gemini), regular VolumePairList does not work as the api does not natively provide 24h volume. This can be worked around by using candle data to build the volume.
     To roughly simulate 24h volume, you can use the following configuration.
     Please note that These pairlists will only refresh once per day.
 
@@ -147,6 +151,89 @@ More sophisticated approach can be used, by using `lookback_timeframe` for candl
 
 !!! Note
     `VolumePairList` does not support backtesting mode.
+
+#### Percent Change Pair List
+
+`PercentChangePairList` filters and sorts pairs based on the percentage change in their price over the last 24 hours or any defined timeframe as part of advanced options. This allows traders to focus on assets that have experienced significant price movements, either positive or negative.
+
+**Configuration Options**
+
+* `number_assets`: Specifies the number of top pairs to select based on the 24-hour percentage change.
+* `min_value`: Sets a minimum percentage change threshold. Pairs with a percentage change below this value will be filtered out.
+* `max_value`: Sets a maximum percentage change threshold. Pairs with a percentage change above this value will be filtered out.
+* `sort_direction`: Specifies the order in which pairs are sorted based on their percentage change. Accepts two values: `asc` for ascending order and `desc` for descending order.
+* `refresh_period`: Defines the interval (in seconds) at which the pairlist will be refreshed. The default is 1800 seconds (30 minutes).
+* `lookback_days`: Number of days to look back. When `lookback_days` is selected, the `lookback_timeframe` is defaulted to 1 day.
+* `lookback_timeframe`: Timeframe to use for the lookback period.
+* `lookback_period`: Number of periods to look back at. 
+
+When PercentChangePairList is used after other Pairlist Handlers, it will operate on the outputs of those handlers. If it is the leading Pairlist Handler, it will select pairs from all available markets with the specified stake currency.
+
+`PercentChangePairList` uses ticker data from the exchange, provided via the ccxt library:
+The percentage change is calculated as the change in price over the last 24 hours.
+
+??? Note "Unsupported exchanges"
+    On some exchanges (like HTX), regular PercentChangePairList does not work as the api does not natively provide 24h percent change in price. This can be worked around by using candle data to calculate the percentage change. To roughly simulate 24h percent change, you can use the following configuration. Please note that these pairlists will only refresh once per day.
+    ```json
+    "pairlists": [
+        {
+            "method": "PercentChangePairList",
+            "number_assets": 20,
+            "min_value": 0,
+            "refresh_period": 86400,
+            "lookback_days": 1
+        }
+    ],
+    ```
+
+**Example Configuration to Read from Ticker**
+
+```json
+"pairlists": [
+    {
+        "method": "PercentChangePairList",
+        "number_assets": 15,
+        "min_value": -10,
+        "max_value": 50
+    }
+],
+```
+
+In this configuration:
+
+1. The top 15 pairs are selected based on the highest percentage change in price over the last 24 hours.
+2. Only pairs with a percentage change between -10% and 50% are considered.
+
+**Example Configuration to Read from Candles**
+
+```json
+"pairlists": [
+    {
+        "method": "PercentChangePairList",
+        "number_assets": 15,
+        "sort_key": "percentage",
+        "min_value": 0,
+        "refresh_period": 3600,
+        "lookback_timeframe": "1h",
+        "lookback_period": 72
+    }
+],
+```
+
+This example builds the percent change pairs based on a rolling period of 3 days of 1-hour candles by using `lookback_timeframe` for candle size and `lookback_period` which specifies the number of candles.
+
+The percent change in price is calculated using the following formula, which expresses the percentage difference between the current candle's close price and the previous candle's close price, as defined by the specified timeframe and lookback period:
+
+$$ Percent Change = (\frac{Current Close - Previous Close}{Previous Close}) * 100 $$
+
+!!! Warning "Range look back and refresh period"
+    When used in conjunction with `lookback_days` and `lookback_timeframe` the `refresh_period` can not be smaller than the candle size in seconds. As this will result in unnecessary requests to the exchanges API.
+
+!!! Warning "Performance implications when using lookback range"
+    If used in first position in combination with lookback, the computation of the range-based percent change can be time and resource consuming, as it downloads candles for all tradable pairs. Hence it's highly advised to use the standard approach with `PercentChangePairList` to narrow the pairlist down for further percent-change calculation.
+
+!!! Note "Backtesting"
+    `PercentChangePairList` does not support backtesting mode.
 
 #### ProducerPairList
 
@@ -191,20 +278,57 @@ The RemotePairList is defined in the pairlists section of the configuration sett
         "refresh_period": 1800,
         "keep_pairlist_on_failure": true,
         "read_timeout": 60,
-        "bearer_token": "my-bearer-token"
+        "bearer_token": "my-bearer-token",
+        "save_to_file": "user_data/filename.json" 
     }
 ]
 ```
 
 The optional `mode` option specifies if the pairlist should be used as a `blacklist` or as a `whitelist`. The default value is "whitelist".
 
-The optional `processing_mode` option in the RemotePairList configuration determines how the retrieved pairlist is processed. It can have two values: "filter" or "append".
+The optional `processing_mode` option in the RemotePairList configuration determines how the retrieved pairlist is processed. It can have two values: "filter" or "append". The default value is "filter".
 
 In "filter" mode, the retrieved pairlist is used as a filter. Only the pairs present in both the original pairlist and the retrieved pairlist are included in the final pairlist. Other pairs are filtered out.
 
 In "append" mode, the retrieved pairlist is added to the original pairlist. All pairs from both lists are included in the final pairlist without any filtering.
 
 The `pairlist_url` option specifies the URL of the remote server where the pairlist is located, or the path to a local file (if file:/// is prepended). This allows the user to use either a remote server or a local file as the source for the pairlist.
+
+The `save_to_file` option, when provided with a valid filename, saves the processed pairlist to that file in JSON format. This option is optional, and by default, the pairlist is not saved to a file.
+
+??? Example "Multi bot with shared pairlist example"
+    
+    `save_to_file` can be used to save the pairlist to a file with Bot1:
+
+    ```json
+    "pairlists": [
+        {
+            "method": "RemotePairList",
+            "mode": "whitelist",
+            "pairlist_url": "https://example.com/pairlist",
+            "number_assets": 10,
+            "refresh_period": 1800,
+            "keep_pairlist_on_failure": true,
+            "read_timeout": 60,
+            "save_to_file": "user_data/filename.json" 
+        }
+    ]
+    ```
+
+    This saved pairlist file can be loaded by Bot2, or any additional bot with this configuration:
+
+    ```json
+    "pairlists": [
+        {
+            "method": "RemotePairList",
+            "mode": "whitelist",
+            "pairlist_url": "file:///user_data/filename.json",
+            "number_assets": 10,
+            "refresh_period": 10,
+            "keep_pairlist_on_failure": true,
+        }
+    ]
+    ```    
 
 The user is responsible for providing a server or local file that returns a JSON object with the following structure:
 
@@ -226,6 +350,33 @@ The optional `bearer_token` will be included in the requests Authorization Heade
 !!! Note
     In case of a server error the last received pairlist will be kept if `keep_pairlist_on_failure` is set to true, when set to false a empty pairlist is returned.
 
+#### MarketCapPairList
+
+`MarketCapPairList` employs sorting/filtering of pairs by their marketcap rank based of CoinGecko. The returned pairlist will be sorted based of their marketcap ranks.
+
+```json
+"pairlists": [
+    {
+        "method": "MarketCapPairList",
+        "number_assets": 20,
+        "max_rank": 50,
+        "refresh_period": 86400,
+        "categories": ["layer-1"]
+    }
+]
+```
+
+`number_assets` defines the maximum number of pairs returned by the pairlist. `max_rank` will determine the maximum rank used in creating/filtering the pairlist. It's expected that some coins within the top `max_rank` marketcap will not be included in the resulting pairlist since not all pairs will have active trading pairs in your preferred market/stake/exchange combination.  
+While using a `max_rank` bigger than 250 is supported, it's not recommended, as it'll cause multiple API calls to CoinGecko, which can lead to rate limit issues.
+
+The `refresh_period` setting defines the interval (in seconds) at which the marketcap rank data will be refreshed. The default is 86,400 seconds (1 day). The pairlist cache (`refresh_period`) applies to both generating pairlists (when in the first position in the list) and filtering instances (when not in the first position in the list).
+
+The `categories` setting specifies the [coingecko categories](https://www.coingecko.com/en/categories) from which to select coins from. The default is an empty list `[]`, meaning no category filtering is applied.
+If an incorrect category string is chosen, the plugin will print the available categories from CoinGecko and fail. The category should be the ID of the category, for example, for `https://www.coingecko.com/en/categories/layer-1`, the category ID would be `layer-1`. You can pass multiple categories such as `["layer-1", "meme-token"]` to select from several categories.
+
+!!! Warning "Many categories"
+    Each added category corresponds to one API call to CoinGecko. The more categories you add, the longer the pairlist generation will take, potentially causing rate limit issues.
+
 #### AgeFilter
 
 Removes pairs that have been listed on the exchange for less than `min_days_listed` days (defaults to `10`) or more than `max_days_listed` days (defaults `None` mean infinity).
@@ -235,6 +386,17 @@ in the first few days while the pair goes through its price-discovery period. Bo
 be caught out buying before the pair has finished dropping in price.
 
 This filter allows freqtrade to ignore pairs until they have been listed for at least `min_days_listed` days and listed before `max_days_listed`.
+
+#### FullTradesFilter
+
+Shrink whitelist to consist only in-trade pairs when the trade slots are full (when `max_open_trades` isn't being set to `-1` in the config).
+
+When the trade slots are full, there is no need to calculate indicators of the rest of the pairs (except informative pairs) since no new trade can be opened. By shrinking the whitelist to just the in-trade pairs, you can improve calculation speeds and reduce CPU usage. When a trade slot is free (either a trade is closed or `max_open_trades` value in config is increased), then the whitelist will return to normal state.
+
+When multiple pairlist filters are being used, it's recommended to put this filter at second position directly below the primary pairlist, so when the trade slots are full, the bot doesn't have to download data for the rest of the filters.
+
+!!! Warning "Backtesting"
+    `FullTradesFilter` does not support backtesting mode.
 
 #### OffsetFilter
 
@@ -299,6 +461,11 @@ As this Filter uses past performance of the bot, it'll have some startup-period 
 #### PrecisionFilter
 
 Filters low-value coins which would not allow setting stoplosses.
+
+Namely, pairs are blacklisted if a variance of one percent or more in the stop price would be caused by precision rounding on the exchange, i.e. `rounded(stop_price) <= rounded(stop_price * 0.99)`. The idea is to avoid coins with a value VERY close to their lower trading boundary, not allowing setting of proper stoploss.
+
+!!! Tip "PrecisionFilter is pointless for futures trading"
+    The above does not apply to shorts. And for longs, in theory the trade will be liquidated first.
 
 !!! Warning "Backtesting"
     `PrecisionFilter` does not support backtesting mode using multiple strategies.
@@ -376,10 +543,12 @@ If the trading range over the last 10 days is <1% or >99%, remove the pair from 
         "lookback_days": 10,
         "min_rate_of_change": 0.01,
         "max_rate_of_change": 0.99,
-        "refresh_period": 1440
+        "refresh_period": 86400
     }
 ]
 ```
+
+Adding `"sort_direction": "asc"` or `"sort_direction": "desc"` enables sorting for this pairlist.
 
 !!! Tip
     This Filter can be used to automatically remove stable coin pairs, which have a very low trading range, and are therefore extremely difficult to trade with profit.
@@ -391,7 +560,7 @@ Volatility is the degree of historical variation of a pairs over time, it is mea
 
 This filter removes pairs if the average volatility over a `lookback_days` days is below `min_volatility` or above `max_volatility`. Since this is a filter that requires additional data, the results are cached for `refresh_period`.
 
-This filter can be used to narrow down your pairs to a certain volatility or avoid very volatile pairs. 
+This filter can be used to narrow down your pairs to a certain volatility or avoid very volatile pairs.
 
 In the below example:
 If the volatility over the last 10 days is not in the range of 0.05-0.50, remove the pair from the whitelist. The filter is applied every 24h.
@@ -407,6 +576,8 @@ If the volatility over the last 10 days is not in the range of 0.05-0.50, remove
     }
 ]
 ```
+
+Adding `"sort_direction": "asc"` or `"sort_direction": "desc"` enables sorting mode for this pairlist.
 
 ### Full example of Pairlist Handlers
 
@@ -431,7 +602,7 @@ The below example blacklists `BNB/BTC`, uses `VolumePairList` with `20` assets, 
         "method": "RangeStabilityFilter",
         "lookback_days": 10,
         "min_rate_of_change": 0.01,
-        "refresh_period": 1440
+        "refresh_period": 86400
     },
     {
         "method": "VolatilityFilter",

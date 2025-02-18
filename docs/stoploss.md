@@ -30,11 +30,13 @@ The Order-type will be ignored if only one mode is available.
 |----------|-------------|
 | Binance  | limit |
 | Binance Futures  | market, limit |
-| Huobi    | limit |
+| Bingx    | market, limit |
+| HTX      | limit |
 | kraken   | market, limit |
 | Gate     | limit |
 | Okx      | limit |
 | Kucoin   | stop-limit, stop-market|
+| Hyperliquid (futures only)   | limit |
 
 !!! Note "Tight stoploss"
     <ins>Do not set too low/tight stoploss value when using stop loss on exchange!</ins>  
@@ -152,13 +154,13 @@ For example, simplified math:
 
 In summary: The stoploss will be adjusted to be always be -10% of the highest observed price.
 
-### Trailing stop loss, custom positive loss
+### Trailing stop loss, different positive loss
 
-You could also have a default stop loss when you are in the red with your buy (buy - fee), but once you hit a positive result (or an offset you define) the system will utilize a new stop loss, which can have a different value.
-For example, your default stop loss is -10%, but once you have more than 0% profit (example 0.1%) a different trailing stoploss will be used.
+You could also have a default stop loss when you are in the red with your buy (buy - fee), but once you hit a positive result (or an offset you define) the system will utilize a new stop loss, with a different value.
+For example, your default stop loss is -10%, but once you have reached profitability (example 0.1%) a different trailing stoploss will be used.
 
 !!! Note
-    If you want the stoploss to only be changed when you break even of making a profit (what most users want) please refer to next section with [offset enabled](#Trailing-stop-loss-only-once-the-trade-has-reached-a-certain-offset).
+    If you want the stoploss to only be changed when you break even of making a profit (what most users want) please refer to next section with [offset enabled](#trailing-stop-loss-only-once-the-trade-has-reached-a-certain-offset).
 
 Both values require `trailing_stop` to be set to true and `trailing_stop_positive` with a value.
 
@@ -206,7 +208,9 @@ Before this, `stoploss` is used for the trailing stoploss.
 
 You can also keep a static stoploss until the offset is reached, and then trail the trade to take profits once the market turns.
 
-If `trailing_only_offset_is_reached = True` then the trailing stoploss is only activated once the offset is reached. Until then, the stoploss remains at the configured `stoploss`.
+If `trailing_only_offset_is_reached = True` then the trailing stoploss is only activated once the offset is reached. Until then, the stoploss remains at the configured `stoploss` and is not trailing.
+Leaving this value as `trailing_only_offset_is_reached=False` will allow the trailing stoploss to start trailing as soon as the asset price increases above the initial entry price.
+
 This option can be used with or without `trailing_stop_positive`, but uses `trailing_stop_positive_offset` as offset.
 
 Configuration (offset is buy-price + 3%):
@@ -240,7 +244,7 @@ When using leverage, the same principle is applied - with stoploss defining the 
 
 Therefore, a stoploss of 10% on a 10x trade would trigger on a 1% price move.
 If your stake amount (own capital) was 100$ - this trade would be 1000$ at 10x (after leverage).
-If price moves 1% - you've lost 10$ of your own capital - therfore stoploss will trigger in this case.
+If price moves 1% - you've lost 10$ of your own capital - therefore stoploss will trigger in this case.
 
 Make sure to be aware of this, and avoid using too tight stoploss (at 10x leverage, 10% risk may be too little to allow the trade to "breath" a little).
 

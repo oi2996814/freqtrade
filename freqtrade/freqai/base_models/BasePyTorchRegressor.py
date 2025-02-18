@@ -1,6 +1,6 @@
 import logging
 from time import time
-from typing import Any, Tuple
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -24,7 +24,7 @@ class BasePyTorchRegressor(BasePyTorchModel):
 
     def predict(
         self, unfiltered_df: DataFrame, dk: FreqaiDataKitchen, **kwargs
-    ) -> Tuple[DataFrame, npt.NDArray[np.int_]]:
+    ) -> tuple[DataFrame, npt.NDArray[np.int_]]:
         """
         Filter the prediction features data and predict with it.
         :param unfiltered_df: Full dataframe for the current backtest period.
@@ -41,11 +41,11 @@ class BasePyTorchRegressor(BasePyTorchModel):
         dk.data_dictionary["prediction_features"] = filtered_df
 
         dk.data_dictionary["prediction_features"], outliers, _ = dk.feature_pipeline.transform(
-            dk.data_dictionary["prediction_features"], outlier_check=True)
+            dk.data_dictionary["prediction_features"], outlier_check=True
+        )
 
         x = self.data_convertor.convert_x(
-            dk.data_dictionary["prediction_features"],
-            device=self.device
+            dk.data_dictionary["prediction_features"], device=self.device
         )
         self.model.model.eval()
         y = self.model.model(x)
@@ -59,9 +59,7 @@ class BasePyTorchRegressor(BasePyTorchModel):
         dk.do_predict = outliers
         return (pred_df, dk.do_predict)
 
-    def train(
-        self, unfiltered_df: DataFrame, pair: str, dk: FreqaiDataKitchen, **kwargs
-    ) -> Any:
+    def train(self, unfiltered_df: DataFrame, pair: str, dk: FreqaiDataKitchen, **kwargs) -> Any:
         """
         Filter the training data and train a model to it. Train makes heavy use of the datakitchen
         for storing, saving, loading, and analyzing the data.
@@ -88,22 +86,19 @@ class BasePyTorchRegressor(BasePyTorchModel):
         dk.feature_pipeline = self.define_data_pipeline(threads=dk.thread_count)
         dk.label_pipeline = self.define_label_pipeline(threads=dk.thread_count)
 
-        dd["train_labels"], _, _ = dk.label_pipeline.fit_transform(dd["train_labels"])
-        dd["test_labels"], _, _ = dk.label_pipeline.transform(dd["test_labels"])
-
-        (dd["train_features"],
-         dd["train_labels"],
-         dd["train_weights"]) = dk.feature_pipeline.fit_transform(dd["train_features"],
-                                                                  dd["train_labels"],
-                                                                  dd["train_weights"])
+        (dd["train_features"], dd["train_labels"], dd["train_weights"]) = (
+            dk.feature_pipeline.fit_transform(
+                dd["train_features"], dd["train_labels"], dd["train_weights"]
+            )
+        )
         dd["train_labels"], _, _ = dk.label_pipeline.fit_transform(dd["train_labels"])
 
-        if self.freqai_info.get('data_split_parameters', {}).get('test_size', 0.1) != 0:
-            (dd["test_features"],
-             dd["test_labels"],
-             dd["test_weights"]) = dk.feature_pipeline.transform(dd["test_features"],
-                                                                 dd["test_labels"],
-                                                                 dd["test_weights"])
+        if self.freqai_info.get("data_split_parameters", {}).get("test_size", 0.1) != 0:
+            (dd["test_features"], dd["test_labels"], dd["test_weights"]) = (
+                dk.feature_pipeline.transform(
+                    dd["test_features"], dd["test_labels"], dd["test_weights"]
+                )
+            )
             dd["test_labels"], _, _ = dk.label_pipeline.transform(dd["test_labels"])
 
         logger.info(
@@ -114,7 +109,9 @@ class BasePyTorchRegressor(BasePyTorchModel):
         model = self.fit(dd, dk)
         end_time = time()
 
-        logger.info(f"-------------------- Done training {pair} "
-                    f"({end_time - start_time:.2f} secs) --------------------")
+        logger.info(
+            f"-------------------- Done training {pair} "
+            f"({end_time - start_time:.2f} secs) --------------------"
+        )
 
         return model

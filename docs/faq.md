@@ -2,7 +2,7 @@
 
 ## Supported Markets
 
-Freqtrade supports spot trading, as well as (isolated) futures trading for some selected exchanges. Please refer to the [documentation start page](index.md#supported-futures-exchanges-experimental) for an uptodate list of supported exchanges.
+Freqtrade supports spot trading, as well as (isolated) futures trading for some selected exchanges. Please refer to the [documentation start page](index.md#supported-futures-exchanges-experimental) for an up-to-date list of supported exchanges.
 
 ### Can my bot open short positions?
 
@@ -14,7 +14,7 @@ In spot markets, you can in some cases use leveraged spot tokens, which reflect 
 
 ### Can my bot trade options or futures?
 
-Futures trading is supported for selected exchanges. Please refer to the [documentation start page](index.md#supported-futures-exchanges-experimental) for an uptodate list of supported exchanges.
+Futures trading is supported for selected exchanges. Please refer to the [documentation start page](index.md#supported-futures-exchanges-experimental) for an up-to-date list of supported exchanges.
 
 ## Beginner Tips & Tricks
 
@@ -40,11 +40,17 @@ This could be caused by the following reasons:
 * The installation did not complete successfully.
   * Please check the [Installation documentation](installation.md).
 
+### The bot starts, but in STOPPED mode
+
+Make sure you set the `initial_state` config option to `"running"` in your config.json
+
 ### I have waited 5 minutes, why hasn't the bot made any trades yet?
 
-* Depending on the buy strategy, the amount of whitelisted coins, the
-situation of the market etc, it can take up to hours to find a good entry
+* Depending on the entry strategy, the amount of whitelisted coins, the
+situation of the market etc, it can take up to hours or days to find a good entry
 position for a trade. Be patient!
+
+* Backtesting will tell you roughly how many trades to expect - but that won't guarantee that they'll be distributed evenly across time - so you could have 20 trades on one day, and 0 for the rest of the week.
 
 * It may be because of a configuration error. It's best to check the logs, they usually tell you if the bot is simply not getting buy signals (only heartbeat messages), or if there is something wrong (errors / exceptions in the log).
 
@@ -100,6 +106,19 @@ You can use the `/stopentry` command in Telegram to prevent future trade entry, 
 
 Please look at the [advanced setup documentation Page](advanced-setup.md#running-multiple-instances-of-freqtrade).
 
+### I'm getting "Impossible to load Strategy" when starting the bot
+
+This error message is shown when the bot cannot load the strategy.
+Usually, you can use `freqtrade list-strategies` to list all available strategies. 
+The output of this command will also include a status column, showing if the strategy can be loaded.
+
+Please check the following:
+
+* Are you using the correct strategy name? The strategy name is case-sensitive and must correspond to the Strategy class name (not the filename!).
+* Is the strategy in the `user_data/strategies` directory, and has the file-ending `.py`?
+* Does the bot show other warnings before this error? Maybe you're missing some dependencies for the strategy - which would be highlighted in the log.
+* In case of docker - is the strategy directory mounted correctly (check the volumes part of the docker-compose file)?
+
 ### I'm getting "Missing data fillup" messages in the log
 
 This message is just a warning that the latest candles had missing candles in them.
@@ -116,6 +135,10 @@ This message is a warning that the candles had a price jump of > 30%.
 This might be a sign that the pair stopped trading, and some token exchange took place (e.g. COCOS in 2021 - where price jumped from 0.0000154 to 0.01621).
 This message is often accompanied by ["Missing data fillup"](#im-getting-missing-data-fillup-messages-in-the-log) - as trading on such pairs is often stopped for some time.
 
+### I want to reset the bot's database
+
+To reset the bot's database, you can either delete the database (by default `tradesv3.sqlite` or `tradesv3.dryrun.sqlite`), or use a different database url via `--db-url` (e.g. `sqlite:///mynewdatabase.sqlite`).
+
 ### I'm getting "Outdated history for pair xxx" in the log
 
 The bot is trying to tell you that it got an outdated last candle (not the last complete candle).
@@ -128,15 +151,9 @@ This warning can point to one of the below problems:
 * Barely traded pair -> Check the pair on the exchange webpage, look at the timeframe your strategy uses. If the pair does not have any volume in some candles (usually visualized with a "volume 0" bar, and a "_" as candle), this pair did not have any trades in this timeframe. These pairs should ideally be avoided, as they can cause problems with order-filling.
 * API problem -> API returns wrong data (this only here for completeness, and should not happen with supported exchanges).
 
-### I'm getting the "RESTRICTED_MARKET" message in the log
-
-Currently known to happen for US Bittrex users.
-
-Read [the Bittrex section about restricted markets](exchanges.md#restricted-markets) for more information.
-
 ### I'm getting the "Exchange XXX does not support market orders." message and cannot run my strategy
 
-As the message says, your exchange does not support market orders and you have one of the [order types](configuration.md/#understand-order_types) set to "market". Your strategy was probably written with other exchanges in mind and sets "market" orders for "stoploss" orders, which is correct and preferable for most of the exchanges supporting market orders (but not for Bittrex and Gate.io).
+As the message says, your exchange does not support market orders and you have one of the [order types](configuration.md/#understand-order_types) set to "market". Your strategy was probably written with other exchanges in mind and sets "market" orders for "stoploss" orders, which is correct and preferable for most of the exchanges supporting market orders (but not for Gate.io).
 
 To fix this, redefine order types in the strategy to use "limit" instead of "market":
 
@@ -152,9 +169,9 @@ The same fix should be applied in the configuration file, if order types are def
 
 ### I'm trying to start the bot live, but get an API permission error
 
-Errors like `Invalid API-key, IP, or permissions for action` mean exactly what they actually say.
-Your API key is either invalid (copy/paste error? check for leading/trailing spaces in the config), expired, or the IP you're running the bot from is not enabled in the Exchange's API console.
-Usually, the permission "Spot Trading" (or the equivalent in the exchange you use) will be necessary.
+Errors like `Invalid API-key, IP, or permissions for action` mean exactly what they actually say.  
+Your API key is either invalid (copy/paste error? check for leading/trailing spaces in the config), expired, or the IP you're running the bot from is not enabled in the Exchange's API console.  
+Usually, the permission "Spot Trading" (or the equivalent in the exchange you use) will be necessary.  
 Futures will usually have to be enabled specifically.
 
 ### How do I search the bot logs for something?

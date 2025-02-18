@@ -1,6 +1,5 @@
 import logging
 from functools import reduce
-from typing import Dict
 
 import numpy as np
 import talib.abstract as ta
@@ -57,39 +56,37 @@ class freqai_test_classifier(IStrategy):
                 informative_pairs.append((pair, tf))
         return informative_pairs
 
-    def feature_engineering_expand_all(self, dataframe: DataFrame, period: int,
-                                       metadata: Dict, **kwargs):
-
+    def feature_engineering_expand_all(
+        self, dataframe: DataFrame, period: int, metadata: dict, **kwargs
+    ):
         dataframe["%-rsi-period"] = ta.RSI(dataframe, timeperiod=period)
         dataframe["%-mfi-period"] = ta.MFI(dataframe, timeperiod=period)
         dataframe["%-adx-period"] = ta.ADX(dataframe, timeperiod=period)
 
         return dataframe
 
-    def feature_engineering_expand_basic(self, dataframe: DataFrame, metadata: Dict, **kwargs):
-
+    def feature_engineering_expand_basic(self, dataframe: DataFrame, metadata: dict, **kwargs):
         dataframe["%-pct-change"] = dataframe["close"].pct_change()
         dataframe["%-raw_volume"] = dataframe["volume"]
         dataframe["%-raw_price"] = dataframe["close"]
 
         return dataframe
 
-    def feature_engineering_standard(self, dataframe: DataFrame, metadata: Dict, **kwargs):
-
+    def feature_engineering_standard(self, dataframe: DataFrame, metadata: dict, **kwargs):
         dataframe["%-day_of_week"] = dataframe["date"].dt.dayofweek
         dataframe["%-hour_of_day"] = dataframe["date"].dt.hour
 
         return dataframe
 
-    def set_freqai_targets(self, dataframe: DataFrame, metadata: Dict, **kwargs):
+    def set_freqai_targets(self, dataframe: DataFrame, metadata: dict, **kwargs):
         self.freqai.class_names = ["down", "up"]
-        dataframe['&s-up_or_down'] = np.where(dataframe["close"].shift(-100) >
-                                              dataframe["close"], 'up', 'down')
+        dataframe["&s-up_or_down"] = np.where(
+            dataframe["close"].shift(-100) > dataframe["close"], "up", "down"
+        )
 
         return dataframe
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-
         self.freqai_info = self.config["freqai"]
 
         dataframe = self.freqai.start(dataframe, metadata, self)
@@ -97,15 +94,14 @@ class freqai_test_classifier(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
-
-        enter_long_conditions = [df['&s-up_or_down'] == 'up']
+        enter_long_conditions = [df["&s-up_or_down"] == "up"]
 
         if enter_long_conditions:
             df.loc[
                 reduce(lambda x, y: x & y, enter_long_conditions), ["enter_long", "enter_tag"]
             ] = (1, "long")
 
-        enter_short_conditions = [df['&s-up_or_down'] == 'down']
+        enter_short_conditions = [df["&s-up_or_down"] == "down"]
 
         if enter_short_conditions:
             df.loc[
@@ -115,5 +111,4 @@ class freqai_test_classifier(IStrategy):
         return df
 
     def populate_exit_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
-
         return df
